@@ -11,7 +11,7 @@
 void print_version(void) {
   printf("%s version %s\n", WIR_NAME, WIR_VERSION);
   printf("%s\n", WIR_DESCRIPTION);
-  printf("Crafted with ♥️ by %s\n", WIR_AUTHOR);
+  printf("\nCrafted with ♥️ by %s\n", WIR_AUTHOR);
 }
 
 /**
