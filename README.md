@@ -1,4 +1,5 @@
 # wir - What Is Running
+[![Release](https://github.com/AlbertoBarrago/wir/actions/workflows/release.yml/badge.svg)](https://github.com/AlbertoBarrago/wir/actions/workflows/release.yml)
 
 A cross-platform CLI tool written in C to inspect what's running on specific ports and explain process details.
 
