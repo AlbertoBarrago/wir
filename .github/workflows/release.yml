@@ -53,17 +53,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Update Homebrew tap
-        env:
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-        run: |
-          # Clone using token authentication (x-access-token format for GitHub)
-          git clone https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/AlbertoBarrago/homebrew-tap.git tap
-          cd tap
+      - name: Checkout Homebrew tap repository
+        uses: actions/checkout@v4
+        with:
+          repository: AlbertoBarrago/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
 
-          # Configure git identity
-          git config user.name "GitHub Action"
-          git config user.email "action@github.com"
+      - name: Update Homebrew formula
+        run: |
+          cd tap
 
           # Update the formula
           cat > Formula/wir.rb << 'EOF'
@@ -85,7 +84,9 @@ jobs:
           end
           EOF
 
-          # Commit and push
+          # Configure git and commit
+          git config user.name "GitHub Action"
+          git config user.email "action@github.com"
           git add Formula/wir.rb
           git commit -m "Update wir to ${{ steps.get_version.outputs.version }}"
           git push
