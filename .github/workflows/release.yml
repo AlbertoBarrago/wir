@@ -56,13 +56,9 @@ jobs:
       - name: Update Homebrew tap
         env:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          GIT_USERNAME: ${{ github.actor }}
         run: |
-          # Configure git credentials
-          git config --global credential.helper store
-          echo "https://${GIT_USERNAME}:${HOMEBREW_TAP_TOKEN}@github.com" > ~/.git-credentials
-
-          git clone https://github.com/AlbertoBarrago/homebrew-tap.git tap
+          # Clone using token authentication (x-access-token format for GitHub)
+          git clone https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/AlbertoBarrago/homebrew-tap.git tap
           cd tap
 
           # Configure git identity
