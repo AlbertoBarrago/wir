@@ -1,0 +1,85 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build-and-release:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: get_version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Update version.h
+        run: |
+          sed -i '' 's/#define WIR_VERSION ".*"/#define WIR_VERSION "${{ steps.get_version.outputs.version }}"/' src/version.h
+          cat src/version.h
+
+      - name: Build binary
+        run: make clean && make
+
+      - name: Create tarball
+        run: |
+          mkdir -p wir-${{ steps.get_version.outputs.version }}
+          cp wir wir-${{ steps.get_version.outputs.version }}/
+          cp README.md wir-${{ steps.get_version.outputs.version }}/
+          tar -czf wir-${{ steps.get_version.outputs.version }}.tar.gz wir-${{ steps.get_version.outputs.version }}
+
+      - name: Calculate SHA256
+        id: sha256
+        run: |
+          SHA256=$(shasum -a 256 wir-${{ steps.get_version.outputs.version }}.tar.gz | awk '{print $1}')
+          echo "sha256=$SHA256" >> $GITHUB_OUTPUT
+          echo "SHA256: $SHA256"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: wir-${{ steps.get_version.outputs.version }}.tar.gz
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Homebrew tap
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          git clone https://$HOMEBREW_TAP_TOKEN@github.com/AlbertoBarrago/homebrew-tap.git tap
+          cd tap
+
+          # Update the formula
+          cat > Formula/wir.rb << 'EOF'
+          class Wir < Formula
+            desc "What Is Running - Port and Process Inspector"
+            homepage "https://github.com/AlbertoBarrago/Wir"
+            url "https://github.com/AlbertoBarrago/Wir/releases/download/v${{ steps.get_version.outputs.version }}/wir-${{ steps.get_version.outputs.version }}.tar.gz"
+            sha256 "${{ steps.sha256.outputs.sha256 }}"
+            version "${{ steps.get_version.outputs.version }}"
+            license "MIT"
+
+            def install
+              bin.install "wir"
+            end
+
+            test do
+              system "#{bin}/wir", "--help"
+            end
+          end
+          EOF
+
+          # Commit and push
+          git config user.name "GitHub Action"
+          git config user.email "action@github.com"
+          git add Formula/wir.rb
+          git commit -m "Update wir to ${{ steps.get_version.outputs.version }}"
+          git push
