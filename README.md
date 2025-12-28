@@ -4,9 +4,9 @@ A cross-platform CLI tool written in C to inspect what's running on specific por
 
 ## Demo
 
-<video src="https://raw.githubusercontent.com/AlbertoBarrago/wir/main/assets/demo.mp4" controls width="100%">
-  Your browser does not support the video tag. <a href="assets/demo.mp4">Download the demo video</a>.
-</video>
+![wir demo](assets/demo.gif)
+
+> [View full video (MP4)](assets/demo.mp4)
 
 ## Features
 
