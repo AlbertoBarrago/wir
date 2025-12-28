@@ -1,5 +1,7 @@
 # wir - What Is Running
 
+[demo.mp4](demo.mp4)
+
 A cross-platform CLI tool written in C to inspect what's running on specific ports and explain process details.
 
 ## Features
@@ -14,15 +16,24 @@ A cross-platform CLI tool written in C to inspect what's running on specific por
 - Cross-platform support (macOS and Linux)
 - Colorized output (can be disabled)
 
-## Building
+## Installation
 
-### Requirements
+### Via Homebrew (macOS)
+
+```bash
+brew tap AlbertoBarrago/tap
+brew install wir
+```
+
+### Building from Source
+
+#### Requirements
 
 - GCC or Clang compiler
 - Make
 - macOS 10.10+ or Linux with `/proc` filesystem
 
-### Compilation
+#### Compilation
 
 ```bash
 make
@@ -34,7 +45,7 @@ For debug build with symbols:
 make debug
 ```
 
-### Installation
+#### Install
 
 ```bash
 sudo make install
