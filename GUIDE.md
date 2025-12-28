@@ -2,6 +2,12 @@
 
 A comprehensive guide to using `wir` - the "What Is Running" CLI tool.
 
+## Demo
+
+![wir demo](assets/demo.gif)
+
+> [View full video (MP4)](assets/demo.mp4)
+
 ## Table of Contents
 
 1. [Introduction](#introduction)
@@ -32,7 +38,24 @@ Think of it as a combination of `lsof`, `ps`, and `netstat` with a user-friendly
 
 ### Installation
 
-If you've already built the project:
+#### Via Homebrew (macOS - Recommended)
+
+The easiest way to install `wir` on macOS:
+
+```bash
+brew tap AlbertoBarrago/tap
+brew install wir
+```
+
+That's it! Now you can use `wir` from anywhere:
+
+```bash
+wir --help
+```
+
+#### Building from Source
+
+If you prefer to build from source or are on Linux:
 
 ```bash
 # From the Wir directory
@@ -844,6 +867,7 @@ wir --all --json            # JSON output
 # Global options
 --no-color                  # Disable colors
 --help                      # Show help
+--version                   # Show version info
 
 # Special PIDs
 $$                          # Current shell PID

@@ -2,6 +2,12 @@
 
 A cross-platform CLI tool written in C to inspect what's running on specific ports and explain process details.
 
+## Demo
+
+![wir demo](assets/demo.gif)
+
+> [View full video (MP4)](assets/demo.mp4)
+
 ## Features
 
 - Check what process is using a specific port
@@ -14,15 +20,24 @@ A cross-platform CLI tool written in C to inspect what's running on specific por
 - Cross-platform support (macOS and Linux)
 - Colorized output (can be disabled)
 
-## Building
+## Installation
 
-### Requirements
+### Via Homebrew (macOS)
+
+```bash
+brew tap AlbertoBarrago/tap
+brew install wir
+```
+
+### Building from Source
+
+#### Requirements
 
 - GCC or Clang compiler
 - Make
 - macOS 10.10+ or Linux with `/proc` filesystem
 
-### Compilation
+#### Compilation
 
 ```bash
 make
@@ -34,7 +49,7 @@ For debug build with symbols:
 make debug
 ```
 
-### Installation
+#### Install
 
 ```bash
 sudo make install
