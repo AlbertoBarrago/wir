@@ -1,8 +1,12 @@
 # wir - What Is Running
 
-[demo.mp4](demo.mp4)
-
 A cross-platform CLI tool written in C to inspect what's running on specific ports and explain process details.
+
+## Demo
+
+<video src="https://raw.githubusercontent.com/AlbertoBarrago/wir/main/assets/demo.mp4" controls width="100%">
+  Your browser does not support the video tag. <a href="assets/demo.mp4">Download the demo video</a>.
+</video>
 
 ## Features
 
