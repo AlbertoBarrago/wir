@@ -7,7 +7,6 @@ A cross-platform CLI tool written in C to inspect what's running on specific por
 
 ![wir demo](assets/demo.gif)
 
-> [View full video (MP4)](assets/demo.mp4)
 
 ## Features
 

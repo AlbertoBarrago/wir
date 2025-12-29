@@ -6,7 +6,6 @@ A comprehensive guide to using `wir` - the "What Is Running" CLI tool.
 
 ![wir demo](assets/demo.gif)
 
-> [View full video (MP4)](assets/demo.mp4)
 
 ## Table of Contents
 
