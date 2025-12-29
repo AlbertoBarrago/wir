@@ -29,6 +29,7 @@ A comprehensive guide to using `wir` - the "What Is Running" CLI tool.
 - Detailed information about any running process
 - The ancestry (parent chain) of a process
 - Environment variables of a process
+- Interactively kill processes with a simple keypress
 
 Think of it as a combination of `lsof`, `ps`, and `netstat` with a user-friendly interface.
 
@@ -112,6 +113,15 @@ For each mode, you can choose different output formats:
 - **Env** (`--env`): Show environment variables (PID mode only)
 - **Warnings** (`--warnings`): Security warnings (port mode only)
 
+### Interactive Mode
+
+Interactive mode (`--interactive` or `-i`) allows you to kill processes directly after viewing their information. Available for port and PID modes.
+
+When enabled, after displaying process information, you'll be prompted:
+- Press **'k'** to kill the process (sends SIGTERM)
+- Press **'q'** to quit without killing
+- Press any other key to exit interactive mode
+
 ---
 
 ## Command Reference
@@ -183,6 +193,28 @@ wir --port 8080 --warnings
 ```
 
 **Use when**: You're doing security audits or troubleshooting permission issues.
+
+#### Port with Interactive Mode
+
+```bash
+wir --port <port> --interactive
+# or
+wir --port <port> -i
+```
+
+**What it does**: Shows port information and prompts you to kill the process using that port.
+
+**Example**:
+```bash
+wir --port 8080 --interactive
+# After showing port info:
+# Press 'k' to kill process, 'q' to quit, or any other key to exit:
+```
+
+**Use when**:
+- "Address already in use" error - inspect and kill the blocking process
+- Quickly freeing up a port during development
+- Cleaning up stuck processes on specific ports
 
 ### PID Mode
 
@@ -283,6 +315,33 @@ wir --pid 1234 --json
 ```
 
 **Use when**: Integrating with scripts, monitoring systems, or data pipelines.
+
+#### Process with Interactive Mode
+
+```bash
+wir --pid <pid> --interactive
+# or
+wir --pid <pid> -i
+```
+
+**What it does**: Shows process information and prompts you to kill it with a keypress.
+
+**Example**:
+```bash
+wir --pid 1234 --interactive
+# After showing process info:
+# Press 'k' to kill process, 'q' to quit, or any other key to exit:
+```
+
+**Use when**:
+- You want to quickly inspect and potentially kill a process
+- Debugging and need to stop a problematic process
+- Cleaning up development processes interactively
+
+**Note**:
+- Sends SIGTERM (graceful termination) when you press 'k'
+- You may need sudo to kill processes owned by other users
+- Cannot be combined with `--json` output
 
 ### All Mode
 
@@ -396,11 +455,15 @@ If nothing is found, the port is free. If something is there, you'll see what's 
 #### Find and kill a process on a port
 
 ```bash
-# Find the PID
+# Interactive mode (easiest)
+wir --port 8080 --interactive
+# View info, then press 'k' to kill or 'q' to quit
+
+# Or traditional way - Find the PID
 wir --port 8080 --short
 # Output: Port 8080: node[45678] by albz (LISTEN)
 
-# Kill it
+# Kill it manually
 kill 45678
 
 # Or in one command
@@ -635,6 +698,11 @@ alias webcheck='for p in 80 443 3000 8080; do wir --port $p --short 2>/dev/null;
 
 **Solution**:
 ```bash
+# Interactive mode (recommended)
+wir --port 3000 --interactive
+# Press 'k' to kill the process blocking the port
+
+# Or traditional way:
 # Find what's on the port
 wir --port 3000
 
@@ -851,6 +919,7 @@ wir --port <n>              # Full info about port
 wir --port <n> --short      # One-line summary
 wir --port <n> --json       # JSON output
 wir --port <n> --warnings   # Security warnings only
+wir --port <n> -i           # Interactive mode (kill with 'k')
 
 # Process queries
 wir --pid <n>               # Full process info
@@ -858,6 +927,7 @@ wir --pid <n> --short       # One-line summary
 wir --pid <n> --tree        # Show ancestry
 wir --pid <n> --env         # Show environment
 wir --pid <n> --json        # JSON output
+wir --pid <n> -i            # Interactive mode (kill with 'k')
 
 # List all processes
 wir --all                   # Show all processes
@@ -865,6 +935,7 @@ wir --all --short           # One-line per process
 wir --all --json            # JSON output
 
 # Global options
+--interactive, -i           # Enable interactive mode
 --no-color                  # Disable colors
 --help                      # Show help
 --version                   # Show version info

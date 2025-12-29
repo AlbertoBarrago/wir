@@ -33,6 +33,7 @@ typedef struct {
     bool warnings_only; /* --warnings */
     bool no_color;      /* --no-color */
     bool show_env;      /* --env */
+    bool interactive;   /* --interactive */
 } cli_args_t;
 
 /**

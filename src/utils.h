@@ -36,6 +36,10 @@ char *trim_whitespace(char *str);
 bool str_starts_with(const char *str, const char *prefix);
 bool str_ends_with(const char *str, const char *suffix);
 
+/* Interactive utilities */
+char read_single_char(void);
+int prompt_kill_process(pid_t pid, const char *process_name);
+
 /* Error handling macros */
 #define DIE(fmt, ...) do { \
     fprintf(stderr, "Fatal error: " fmt "\n", ##__VA_ARGS__); \

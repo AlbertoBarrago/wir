@@ -3,6 +3,10 @@
 #include <string.h>
 #include <ctype.h>
 #include <errno.h>
+#include <termios.h>
+#include <unistd.h>
+#include <signal.h>
+#include <sys/types.h>
 
 /* Global flag for controlling color output */
 bool use_colors = true;
@@ -232,4 +236,75 @@ bool str_ends_with(const char *str, const char *suffix) {
     }
 
     return strcmp(str + str_len - suffix_len, suffix) == 0;
+}
+
+/**
+ * Read a single character from stdin without waiting for Enter
+ * Returns the character read
+ */
+char read_single_char(void) {
+    struct termios old_term, new_term;
+    char ch;
+
+    /* Get current terminal settings */
+    tcgetattr(STDIN_FILENO, &old_term);
+    new_term = old_term;
+
+    /* Disable canonical mode and echo */
+    new_term.c_lflag &= ~(ICANON | ECHO);
+    tcsetattr(STDIN_FILENO, TCSANOW, &new_term);
+
+    /* Read single character */
+    ch = getchar();
+
+    /* Restore old terminal settings */
+    tcsetattr(STDIN_FILENO, TCSANOW, &old_term);
+
+    return ch;
+}
+
+/**
+ * Prompt user to kill a process
+ * Returns 0 if process was killed, -1 otherwise
+ */
+int prompt_kill_process(pid_t pid, const char *process_name) {
+    printf("\n");
+    print_color(COLOR_YELLOW, "Press 'k' to kill process, 'q' to quit, or any other key to exit: ");
+    fflush(stdout);
+
+    char ch = read_single_char();
+    printf("\n");
+
+    if (ch == 'k' || ch == 'K') {
+        /* Attempt to kill the process */
+        if (kill(pid, SIGTERM) == 0) {
+            print_success("Successfully sent SIGTERM to process %d (%s)", pid, process_name);
+
+            /* Give the process a moment to terminate gracefully */
+            usleep(100000); /* 100ms */
+
+            /* Check if process still exists */
+            if (kill(pid, 0) == 0) {
+                print_info("Process is still running. You may need to use SIGKILL (kill -9) if it doesn't terminate.");
+            } else {
+                print_success("Process %d has been terminated", pid);
+            }
+            return 0;
+        } else {
+            if (errno == EPERM) {
+                print_error("Permission denied. You may need to run with sudo to kill this process.");
+            } else if (errno == ESRCH) {
+                print_error("Process %d no longer exists", pid);
+            } else {
+                print_error("Failed to kill process %d: %s", pid, strerror(errno));
+            }
+            return -1;
+        }
+    } else if (ch == 'q' || ch == 'Q') {
+        print_info("Quit without killing process");
+        return -1;
+    } else {
+        print_info("Exiting interactive mode");
+        return -1;
+    }
 }

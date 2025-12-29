@@ -16,6 +16,7 @@ A cross-platform CLI tool written in C to inspect what's running on specific por
 - List all running processes on the system
 - Show full process ancestry tree
 - Display process environment variables
+- Interactive mode to kill processes with a keypress
 - Multiple output formats (normal, short, JSON, tree)
 - Security warnings for potentially risky configurations
 - Cross-platform support (macOS and Linux)
@@ -81,6 +82,7 @@ wir [OPTIONS]
 - `--warnings` - Show only warnings (port mode only)
 - `--no-color` - Disable colorized output
 - `--env` - Show only environment variables (PID mode only)
+- `--interactive` or `-i` - Enable interactive mode (kill process with 'k' or 'q' to quit)
 - `--help` - Show help message
 
 ### Examples
@@ -138,6 +140,16 @@ wir --all
 ```bash
 wir --all --short
 ```
+
+#### Interactive mode - kill a process
+
+```bash
+wir --pid 1234 --interactive
+# or
+wir --port 8080 -i
+```
+
+Press 'k' to kill the process, 'q' to quit without killing, or any other key to exit.
 
 ## How It Works
 

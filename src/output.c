@@ -76,6 +76,11 @@ int output_process_info(const process_info_t *info, const cli_args_t *args) {
         output_process_normal(info);
     }
 
+    /* Interactive mode - prompt to kill process */
+    if (args->interactive && !args->json_output) {
+        prompt_kill_process(info->pid, info->name);
+    }
+
     return 0;
 }
 
@@ -397,6 +402,17 @@ int output_port_info(int port, const connection_info_t *connections,
         output_port_short(port, connections, count);
     } else {
         output_port_normal(port, connections, count);
+    }
+
+    /* Interactive mode - prompt to kill process(es) */
+    if (args->interactive && !args->json_output && count > 0) {
+        /* Get the first connection's PID */
+        if (connections[0].pid > 0) {
+            process_info_t proc;
+            if (platform_get_process_info(connections[0].pid, &proc) == 0) {
+                prompt_kill_process(proc.pid, proc.name);
+            }
+        }
     }
 
     return 0;

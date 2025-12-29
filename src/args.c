@@ -33,6 +33,7 @@ void print_usage(const char *program_name) {
   printf("  --no-color        Disable colorized output\n");
   printf(
       "  --env             Show only environment variables for the process\n");
+  printf("  --interactive     Enable interactive mode (kill process with 'k')\n");
   printf("  --version         Show version information\n");
   printf("  --help            Show this help message\n");
   printf("\n");
@@ -155,6 +156,8 @@ int parse_args(int argc, char **argv, cli_args_t *args) {
       args->no_color = true;
     } else if (strcmp(arg, "--env") == 0) {
       args->show_env = true;
+    } else if (strcmp(arg, "--interactive") == 0 || strcmp(arg, "-i") == 0) {
+      args->interactive = true;
     } else {
       print_error("Unknown option: %s", arg);
       return -1;
@@ -218,6 +221,18 @@ int validate_args(const cli_args_t *args) {
   /* --warnings only makes sense with --port */
   if (args->warnings_only && args->mode != MODE_PORT) {
     print_error("--warnings can only be used with --port");
+    return -1;
+  }
+
+  /* --interactive only makes sense with --pid or --port */
+  if (args->interactive && args->mode != MODE_PID && args->mode != MODE_PORT) {
+    print_error("--interactive can only be used with --pid or --port");
+    return -1;
+  }
+
+  /* --interactive doesn't work with JSON output */
+  if (args->interactive && args->json_output) {
+    print_error("--interactive cannot be used with --json");
     return -1;
   }
 
