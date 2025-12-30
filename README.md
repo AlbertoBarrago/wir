@@ -1,5 +1,6 @@
 # wir - What Is Running
 [![Release](https://github.com/AlbertoBarrago/wir/actions/workflows/release.yml/badge.svg)](https://github.com/AlbertoBarrago/wir/actions/workflows/release.yml)
+[![Homebrew Version](https://img.shields.io/github/v/tag/AlbertoBarrago/wir?label=homebrew&color=orange&logo=homebrew)](https://github.com/AlbertoBarrago/homebrew-tap/blob/main/Formula/wir.rb)
 
 A cross-platform CLI tool written in C to inspect what's running on specific ports and explain process details.
 
@@ -7,8 +8,6 @@ A cross-platform CLI tool written in C to inspect what's running on specific por
 
 ## Demo
 ![wir demo](assets/demo.gif)
-![GitHub release (latest by date)](https://img.shields.io/github/v/release/albertobarrago/wir)
-
 
 ## Features
 
