@@ -3,8 +3,9 @@
 
 A cross-platform CLI tool written in C to inspect what's running on specific ports and explain process details.
 
-## Demo
+![img.png](assets/img.png)
 
+## Demo
 ![wir demo](assets/demo.gif)
 
 
