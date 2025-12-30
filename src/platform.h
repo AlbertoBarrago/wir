@@ -3,6 +3,7 @@
 
 #include <sys/types.h>
 #include <stdbool.h>
+#include <time.h>
 
 /* Maximum lengths for various fields */
 #define MAX_PROCESS_NAME 256
@@ -36,6 +37,7 @@ typedef struct {
     unsigned long vsz;      /* Virtual memory size (KB) */
     unsigned long rss;      /* Resident set size (KB) */
     int uid;                /* User ID */
+    time_t start_time;      /* Process start time (seconds since epoch) */
 } process_info_t;
 
 /**

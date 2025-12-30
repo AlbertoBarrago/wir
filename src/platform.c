@@ -236,15 +236,41 @@ int platform_get_process_info(pid_t pid, process_info_t *info) {
         return -1;
     }
 
-    /* Parse stat file - format: pid (name) state ppid ... */
+    /* Parse stat file - we need to read more fields to get starttime (field 22) */
     char name[256];
-    if (fscanf(fp, "%*d (%255[^)]) %c %d", name, &info->state, &info->ppid) != 3) {
+    unsigned long long starttime_ticks;
+    if (fscanf(fp, "%*d (%255[^)]) %c %d %*d %*d %*d %*d %*u %*lu %*lu %*lu %*lu "
+                   "%*lu %*lu %*ld %*ld %*ld %*ld %*ld %*ld %llu",
+               name, &info->state, &info->ppid, &starttime_ticks) != 4) {
         fclose(fp);
         return -1;
     }
     fclose(fp);
 
     snprintf(info->name, sizeof(info->name), "%s", name);
+
+    /* Calculate process start time */
+    /* Get system boot time from /proc/stat */
+    time_t boot_time = 0;
+    fp = fopen("/proc/stat", "r");
+    if (fp) {
+        char line[256];
+        while (fgets(line, sizeof(line), fp)) {
+            if (strncmp(line, "btime ", 6) == 0) {
+                sscanf(line + 6, "%ld", &boot_time);
+                break;
+            }
+        }
+        fclose(fp);
+    }
+
+    /* Convert ticks to seconds and add to boot time */
+    long ticks_per_sec = sysconf(_SC_CLK_TCK);
+    if (ticks_per_sec > 0 && boot_time > 0) {
+        info->start_time = boot_time + (starttime_ticks / ticks_per_sec);
+    } else {
+        info->start_time = 0;
+    }
 
     /* Read /proc/[pid]/status for UID and memory info */
     char status_path[64];
@@ -426,8 +452,34 @@ int platform_get_process_info(pid_t pid, process_info_t *info) {
 
     info->ppid = bsd_info.pbi_ppid;
     info->uid = bsd_info.pbi_uid;
-    info->state = bsd_info.pbi_status;
+
+    /* Convert macOS status codes to process state characters */
+    /* BSD status codes: SIDL=1, SRUN=2, SSLEEP=3, SSTOP=4, SZOMB=5 */
+    switch (bsd_info.pbi_status) {
+        case 1:  /* SIDL */
+            info->state = 'I';  /* Idle/being created */
+            break;
+        case 2:  /* SRUN */
+            info->state = 'R';  /* Running */
+            break;
+        case 3:  /* SSLEEP */
+            info->state = 'S';  /* Sleeping */
+            break;
+        case 4:  /* SSTOP */
+            info->state = 'T';  /* Stopped */
+            break;
+        case 5:  /* SZOMB */
+            info->state = 'Z';  /* Zombie */
+            break;
+        default:
+            info->state = '?';  /* Unknown */
+            break;
+    }
+
     snprintf(info->name, sizeof(info->name), "%s", bsd_info.pbi_name);
+
+    /* Get process start time */
+    info->start_time = bsd_info.pbi_start_tvsec;
 
     /* Get username */
     get_username_from_uid(info->uid, info->username, sizeof(info->username));
@@ -471,7 +523,7 @@ int platform_get_process_env(pid_t pid, char ***env_vars, int *count) {
     pclose(fp);
 
     /* Parse environment variables from ps output */
-    /* This is a simplified version - real implementation would be more robust */
+    /* This is a simplified version - a real implementation would be more robust */
     *count = 0;
     int capacity = 10;
     *env_vars = safe_malloc(capacity * sizeof(char *));

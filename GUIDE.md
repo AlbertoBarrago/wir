@@ -2,10 +2,6 @@
 
 A comprehensive guide to using `wir` - the "What Is Running" CLI tool.
 
-## Demo
-
-![wir demo](assets/demo.gif)
-
 
 ## Table of Contents
 

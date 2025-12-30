@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <sys/types.h>
+#include <time.h>
 
 /* Global flag for controlling color output */
 bool use_colors = true;
@@ -306,5 +307,99 @@ int prompt_kill_process(pid_t pid, const char *process_name) {
     } else {
         print_info("Exiting interactive mode");
         return -1;
+    }
+}
+
+/**
+ * Convert process state character to readable name
+ * Returns the full state name as a string
+ */
+const char *get_state_name(char state) {
+    switch (state) {
+        case 'R': return "Running";
+        case 'S': return "Sleeping";
+        case 'D': return "Waiting (Disk Sleep)";
+        case 'Z': return "Zombie";
+        case 'T': return "Stopped";
+        case 't': return "Tracing Stop";
+        case 'I': return "Idle";
+        case 'W': return "Waking";
+        case 'X': return "Dead";
+        case 'x': return "Dead";
+        case 'K': return "Wakekill";
+        case 'P': return "Parked";
+        case '?': return "Unknown";
+        default:  return "Unknown";
+    }
+}
+
+/**
+ * Format process uptime (how long it's been running)
+ * Outputs a human-readable string like "2 days, 3 hours, 45 minutes"
+ */
+void format_uptime(const time_t start_time, char *buffer, size_t buffer_size) {
+    if (start_time == 0) {
+        snprintf(buffer, buffer_size, "Unknown");
+        return;
+    }
+
+    const time_t now = time(NULL);
+    const time_t uptime = now - start_time;
+
+    if (uptime < 0) {
+        snprintf(buffer, buffer_size, "Unknown");
+        return;
+    }
+
+    const int days = uptime / 86400;
+    const int hours = (uptime % 86400) / 3600;
+    const int minutes = (uptime % 3600) / 60;
+    const int seconds = uptime % 60;
+
+    /* Build the string based on what's relevant */
+    char *ptr = buffer;
+    size_t remaining = buffer_size;
+    int written = 0;
+    bool need_comma = false;
+
+    if (days > 0) {
+        written = snprintf(ptr, remaining, "%d day%s", days, days > 1 ? "s" : "");
+        ptr += written;
+        remaining -= written;
+        need_comma = true;
+    }
+
+    if (hours > 0 || days > 0) {
+        if (need_comma) {
+            written = snprintf(ptr, remaining, ", ");
+            ptr += written;
+            remaining -= written;
+        }
+        written = snprintf(ptr, remaining, "%d hour%s", hours, hours != 1 ? "s" : "");
+        ptr += written;
+        remaining -= written;
+        need_comma = true;
+    }
+
+    if (minutes > 0 || hours > 0 || days > 0) {
+        if (need_comma) {
+            written = snprintf(ptr, remaining, ", ");
+            ptr += written;
+            remaining -= written;
+        }
+        written = snprintf(ptr, remaining, "%d minute%s", minutes, minutes != 1 ? "s" : "");
+        ptr += written;
+        remaining -= written;
+        need_comma = true;
+    }
+
+    /* Only show seconds if uptime is less than an hour */
+    if (days == 0 && hours == 0) {
+        if (need_comma) {
+            written = snprintf(ptr, remaining, ", ");
+            ptr += written;
+            remaining -= written;
+        }
+        snprintf(ptr, remaining, "%d second%s", seconds, seconds != 1 ? "s" : "");
     }
 }

@@ -1,5 +1,4 @@
 #include <stdio.h>
-#include <stdlib.h>
 #include "args.h"
 #include "platform.h"
 #include "output.h"

@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <time.h>
 
 /* Global flag for color output */
 extern bool use_colors;
@@ -35,6 +36,10 @@ char *safe_strdup(const char *s);
 char *trim_whitespace(char *str);
 bool str_starts_with(const char *str, const char *prefix);
 bool str_ends_with(const char *str, const char *suffix);
+
+/* Process utilities */
+const char *get_state_name(char state);
+void format_uptime(time_t start_time, char *buffer, size_t buffer_size);
 
 /* Interactive utilities */
 char read_single_char(void);

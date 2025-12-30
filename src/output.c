@@ -25,7 +25,12 @@ static void output_process_normal(const process_info_t *info) {
     printf("%d\n", info->ppid);
 
     print_color(COLOR_CYAN, "  State: ");
-    printf("%c\n", info->state);
+    printf("%s (%c)\n", get_state_name(info->state), info->state);
+
+    print_color(COLOR_CYAN, "  Running for: ");
+    char uptime_buf[128];
+    format_uptime(info->start_time, uptime_buf, sizeof(uptime_buf));
+    printf("%s\n", uptime_buf);
 
     if (info->cmdline[0]) {
         print_color(COLOR_CYAN, "  Command: ");
@@ -49,6 +54,9 @@ static void output_process_short(const process_info_t *info) {
  * Output process info in JSON format
  */
 static void output_process_json(const process_info_t *info) {
+    char uptime_buf[128];
+    format_uptime(info->start_time, uptime_buf, sizeof(uptime_buf));
+
     printf("{\n");
     printf("  \"pid\": %d,\n", info->pid);
     printf("  \"name\": \"%s\",\n", info->name);
@@ -56,6 +64,9 @@ static void output_process_json(const process_info_t *info) {
     printf("  \"user\": \"%s\",\n", info->username);
     printf("  \"uid\": %d,\n", info->uid);
     printf("  \"state\": \"%c\",\n", info->state);
+    printf("  \"state_name\": \"%s\",\n", get_state_name(info->state));
+    printf("  \"start_time\": %ld,\n", (long)info->start_time);
+    printf("  \"uptime\": \"%s\",\n", uptime_buf);
     printf("  \"cmdline\": \"%s\",\n", info->cmdline);
     printf("  \"memory\": {\n");
     printf("    \"vsz_kb\": %lu,\n", info->vsz);
@@ -466,6 +477,8 @@ static void output_process_list_json(const process_info_t *processes, int count)
 
     for (int i = 0; i < count; i++) {
         const process_info_t *proc = &processes[i];
+        char uptime_buf[128];
+        format_uptime(proc->start_time, uptime_buf, sizeof(uptime_buf));
 
         printf("    {\n");
         printf("      \"pid\": %d,\n", proc->pid);
@@ -474,6 +487,9 @@ static void output_process_list_json(const process_info_t *processes, int count)
         printf("      \"user\": \"%s\",\n", proc->username);
         printf("      \"uid\": %d,\n", proc->uid);
         printf("      \"state\": \"%c\",\n", proc->state);
+        printf("      \"state_name\": \"%s\",\n", get_state_name(proc->state));
+        printf("      \"start_time\": %ld,\n", (long)proc->start_time);
+        printf("      \"uptime\": \"%s\",\n", uptime_buf);
         printf("      \"cmdline\": \"%s\",\n", proc->cmdline);
         printf("      \"memory\": {\n");
         printf("        \"vsz_kb\": %lu,\n", proc->vsz);
