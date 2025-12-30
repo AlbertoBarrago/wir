@@ -226,11 +226,25 @@ wir --pid <process_id>
 wir --pid 1234
 ```
 
+**Sample output**:
+```
+Process Information
+  PID: 1234
+  Name: node
+  User: albz (UID: 501)
+  Parent PID: 890
+  State: Sleeping (S)
+  Running for: 2 hours, 15 minutes
+  Command: /usr/local/bin/node server.js
+  Memory: VSZ=1234567 KB, RSS=45678 KB
+```
+
 **Output includes**:
 - Process name
 - User and UID
 - Parent PID
-- Process state
+- Process state (with human-readable name)
+- Process uptime (how long it's been running)
 - Command line
 - Memory usage (VSZ and RSS)
 
@@ -588,13 +602,50 @@ done
 
 ### Process States
 
-The `State` field shows the process state:
+The `State` field shows the process state with a human-readable name and the state code in parentheses:
 
-- `R` - Running
-- `S` - Sleeping (interruptible)
-- `D` - Sleeping (uninterruptible, usually I/O)
-- `Z` - Zombie (terminated but not reaped)
-- `T` - Stopped (by signal or debugger)
+- `Running (R)` - Process is currently executing
+- `Sleeping (S)` - Interruptible sleep (waiting for an event)
+- `Waiting (D)` - Uninterruptible sleep (usually waiting for I/O)
+- `Zombie (Z)` - Process terminated but not yet reaped by parent
+- `Stopped (T)` - Process stopped by signal or debugger
+- `Idle (I)` - Idle kernel thread (macOS)
+
+Example output:
+```
+State: Running (R)
+```
+
+This makes it easier to understand what the process is doing at a glance.
+
+### Process Uptime
+
+The `Running for:` field shows how long the process has been running in a human-readable format:
+
+**Examples**:
+- `Running for: 5 seconds` - Just started
+- `Running for: 3 minutes, 45 seconds` - Running for a few minutes
+- `Running for: 2 hours, 15 minutes` - Running for hours
+- `Running for: 5 days, 8 hours, 23 minutes` - Long-running process
+
+This helps you quickly identify:
+- Recently started processes (potential troublemakers)
+- Long-running processes (stable services)
+- Processes that might have been restarted
+
+**JSON output** also includes:
+- `start_time`: Unix timestamp when the process started
+- `uptime`: Human-readable duration string
+
+Example:
+```json
+{
+  "state": "S",
+  "state_name": "Sleeping",
+  "start_time": 1766241982,
+  "uptime": "9 days, 19 hours, 43 minutes"
+}
+```
 
 ### Connection States
 
@@ -640,6 +691,24 @@ wir --pid $PPID
 
 # Current process in a script
 wir --pid $$
+```
+
+### Identifying Recently Restarted Services
+
+The uptime field helps you quickly spot services that recently restarted:
+
+```bash
+# Check a service's uptime
+wir --pid $(pgrep nginx | head -1)
+
+# If it shows "Running for: 3 minutes" but should have been up for days,
+# you know it recently crashed and restarted!
+
+# Compare uptimes of related processes
+for pid in $(pgrep node); do
+    echo "PID $pid:"
+    wir --pid $pid | grep "Running for:"
+done
 ```
 
 ### Combining with Other Tools

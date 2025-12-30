@@ -16,6 +16,8 @@ A cross-platform CLI tool written in C to inspect what's running on specific por
 - Show full process ancestry tree
 - Display process environment variables
 - Interactive mode to kill processes with a keypress
+- **Human-readable process states** (e.g., "Running (R)" instead of just "R")
+- **Process uptime tracking** - see how long a process has been running
 - Multiple output formats (normal, short, JSON, tree)
 - Security warnings for potentially risky configurations
 - Cross-platform support (macOS and Linux)
