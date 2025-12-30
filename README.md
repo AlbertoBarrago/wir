@@ -7,6 +7,7 @@ A cross-platform CLI tool written in C to inspect what's running on specific por
 
 ## Demo
 ![wir demo](assets/demo.gif)
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/albertobarrago/wir)
 
 
 ## Features
