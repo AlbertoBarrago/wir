@@ -438,7 +438,7 @@ int platform_get_process_env(pid_t pid, char ***env_vars, int *count) {
 
     /* Count environment variables (separated by null bytes) */
     *count = 0;
-    for (size_t i = 0; i < n; i++) {
+    for (size_t i = 0; i <= n; i++) {
         if (buffer[i] == '\0' && i > 0 && buffer[i - 1] != '\0') {
             (*count)++;
         }
@@ -450,7 +450,7 @@ int platform_get_process_env(pid_t pid, char ***env_vars, int *count) {
     /* Split into individual strings */
     int idx = 0;
     char *start = buffer;
-    for (size_t i = 0; i < n; i++) {
+    for (size_t i = 0; i <= n; i++) {
         if (buffer[i] == '\0' && start < buffer + n) {
             if (*start) {
                 (*env_vars)[idx++] = safe_strdup(start);
@@ -637,82 +637,118 @@ int platform_get_process_info(pid_t pid, process_info_t *info) {
 /**
  * Get environment variables for a process (macOS)
  *
- * Retrieves environment variables for a process by executing ps command with
- * environment display option. Due to macOS security restrictions, directly
- * reading process environment is limited, so this uses ps as a workaround.
+ * Retrieves environment variables using the sysctl API with KERN_PROCARGS2.
  *
  * The function:
- * 1. Executes "ps eww -p <pid>" to get process info with full environment
- * 2. Parses output to find environment variables (identified by '=' character)
- * 3. Extracts space-separated "NAME=value" pairs
- * 4. Returns dynamically allocated array (caller must free using platform_free_env_vars)
+ * 1. Uses sysctl(KERN_PROCARGS2) to get process args and environment data
+ * 2. Parses the returned buffer which contains: argc, exec_path, args, env
+ * 3. All strings are null-terminated and packed sequentially in the buffer
+ * 4. Skips over argc, executable path, and arguments to reach environment vars
+ * 5. Returns dynamically allocated array (caller must free using platform_free_env_vars)
+ *
+ * Buffer structure from KERN_PROCARGS2:
+ * - int argc (4 bytes)
+ * - executable path (null-terminated string)
+ * - null padding (to align arguments)
+ * - arguments (null-separated strings, argc count)
+ * - environment variables (null-separated strings in "NAME=value" format)
  *
  * Limitations:
- * - May not work for all processes due to permission restrictions
- * - Simplified parsing that may miss some edge cases
- * - Subject to ps output format changes
+ * - Requires same user or root privileges to access other processes
+ * - May fail for system processes or processes with restricted access
+ * - Returns error if buffer size is insufficient (very large environments)
  *
  * @param pid Process ID to query
  * @param env_vars Output pointer to a dynamically allocated array of environment variable strings
  * @param count Output pointer to the number of environment variables found
- * @return 0 on success, -1 if ps command fails or the process doesn't exist
+ * @return 0 on success, -1 if sysctl fails (permission denied, the process doesn't exist, or buffer too small)
  */
 int platform_get_process_env(const pid_t pid, char ***env_vars, int *count) {
-    /* On macOS, getting environment variables of other processes is restricted
-     * We can try using ps, but it may not work for all processes */
+    int mib[3];
+    size_t size;
+    int argc;
 
-    char cmd[256];
-    snprintf(cmd, sizeof(cmd), "ps eww -p %d 2>/dev/null | tail -1", pid);
+    /* Set up sysctl MIB for KERN_PROCARGS2 */
+    mib[0] = CTL_KERN;
+    mib[1] = KERN_PROCARGS2;
+    mib[2] = pid;
 
-    FILE *fp = popen(cmd, "r");
-    if (!fp) {
+    /* Get the size needed for the buffer */
+    if (sysctl(mib, 3, NULL, &size, NULL, 0) < 0) {
         return -1;
     }
 
-    char line[4096];
-    if (!fgets(line, sizeof(line), fp)) {
-        pclose(fp);
+    /* Allocate buffer */
+    char* buffer = safe_malloc(size);
+
+    /* Get the actual data */
+    if (sysctl(mib, 3, buffer, &size, NULL, 0) < 0) {
+        free(buffer);
         return -1;
     }
-    pclose(fp);
 
-    /* Parse environment variables from ps output */
-    /* This is a simplified version - a real implementation would be more robust */
+    /* Parse the buffer:
+     * First 4 bytes are argc (number of arguments)
+     * Then comes the executable path (null-terminated)
+     * Then null padding
+     * Then the arguments (null-separated, argc times)
+     * Then environment variables (null-separated until the end of buffer)
+     */
+
+    /* Read argc */
+    memcpy(&argc, buffer, sizeof(argc));
+    char *ptr = buffer + sizeof(argc);
+
+    /* Skip executable path (null-terminated string) */
+    ptr += strlen(ptr) + 1;
+
+    /* Skip any null padding bytes after an executable path */
+    while (ptr < buffer + size && *ptr == '\0') {
+        ptr++;
+    }
+
+    /* Skip all arguments (argc null-terminated strings) */
+    for (int i = 0; i < argc && ptr < buffer + size; i++) {
+        ptr += strlen(ptr) + 1;
+    }
+
+    /* Now ptr points to the start of environment variables */
+    /* Count environment variables first */
     *count = 0;
-    int capacity = 10;
-    *env_vars = safe_malloc(capacity * sizeof(char *));
-
-    /* Skip the initial columns (PID, TTY, STAT, etc.) and get to the environment */
-    char *env_start = strstr(line, "=");
-    if (!env_start) {
-        return 0;
-    }
-
-    /* Backtrack to find the start of the variable name */
-    while (env_start > line && *(env_start - 1) != ' ') {
-        env_start--;
-    }
-
-    /* Parse environment variables (space-separated) */
-    char *token = env_start;
-    while (token && *token) {
-        char *next = strchr(token, ' ');
-        if (next) {
-            *next = '\0';
-            next++;
+    char *temp_ptr = ptr;
+    while (temp_ptr < buffer + size) {
+        if (*temp_ptr == '\0') {
+            /* End of environment */
+            break;
         }
-
-        if (strchr(token, '=')) {
-            if (*count >= capacity) {
-                capacity *= 2;
-                *env_vars = safe_realloc(*env_vars, capacity * sizeof(char *));
-            }
-            (*env_vars)[(*count)++] = safe_strdup(token);
+        /* Check if this looks like an environment variable (contains '=') */
+        if (strchr(temp_ptr, '=')) {
+            (*count)++;
         }
-
-        token = next;
+        temp_ptr += strlen(temp_ptr) + 1;
     }
 
+    /* Allocate array for environment variable pointers */
+    *env_vars = safe_malloc(*count * sizeof(char *));
+
+    /* Copy environment variables */
+    int idx = 0;
+    while (ptr < buffer + size && idx < *count) {
+        if (*ptr == '\0') {
+            /* End of environment */
+            break;
+        }
+        /* Only copy strings that contain '=' (valid env vars) */
+        if (strchr(ptr, '=')) {
+            (*env_vars)[idx++] = safe_strdup(ptr);
+        }
+        ptr += strlen(ptr) + 1;
+    }
+
+    /* Update count to actual number copied */
+    *count = idx;
+
+    free(buffer);
     return 0;
 }
 
@@ -727,7 +763,7 @@ int platform_get_process_env(const pid_t pid, char ***env_vars, int *count) {
 /**
  * Build process ancestry tree
  */
-int platform_get_process_tree(pid_t pid, process_tree_node_t **tree) {
+int platform_get_process_tree(const pid_t pid, process_tree_node_t **tree) {
     process_tree_node_t *node = safe_calloc(1, sizeof(process_tree_node_t));
 
     if (platform_get_process_info(pid, &node->info) < 0) {
