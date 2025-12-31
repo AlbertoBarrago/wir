@@ -19,6 +19,13 @@
 
 /**
  * Initialize platform-specific resources
+ *
+ * Performs any necessary platform-specific initialization before the application
+ * can query process and network information. Currently, both Linux and macOS
+ * implementations require no initialization, but this function exists to provide
+ * a hook for future platform-specific setup if needed.
+ *
+ * @return 0 on success (always succeeds in current implementation)
  */
 int platform_init(void) {
     /* Currently no initialization needed for either platform */
@@ -27,16 +34,32 @@ int platform_init(void) {
 
 /**
  * Clean up platform-specific resources
+ *
+ * Releases any platform-specific resources allocated during application execution.
+ * Currently, both Linux and macOS implementations require no cleanup, but this
+ * function exists to provide a hook for future platform-specific teardown if needed.
+ * Should be called before application exit.
+ *
+ * @return void
  */
 void platform_cleanup(void) {
     /* Currently no cleanup needed */
 }
 
 /**
- * Get username from UID
+ * Get username from UID using system password database
+ *
+ * Converts a numeric user ID to a human-readable username by querying the
+ * system password database. Falls back to displaying the numeric UID if
+ * username lookup fails.
+ *
+ * @param uid User ID to look up
+ * @param username Buffer to store the username string
+ * @param size Size of username buffer
+ * @return void (username is always populated, either with name or numeric UID)
  */
-static void get_username_from_uid(int uid, char *username, size_t size) {
-    struct passwd *pw = getpwuid(uid);
+static void get_username_from_uid(const int uid, char *username, size_t size) {
+    const struct passwd *pw = getpwuid(uid);
     if (pw) {
         snprintf(username, size, "%s", pw->pw_name);
     } else {
@@ -50,7 +73,25 @@ static void get_username_from_uid(int uid, char *username, size_t size) {
 #ifdef __linux__
 
 /**
- * Parse /proc/net/tcp or /proc/net/tcp6 to find connections
+ * Parse /proc/net/tcp or /proc/net/tcp6 to find connections on a specific port (Linux)
+ *
+ * Reads and parses Linux's /proc/net/tcp or /proc/net/tcp6 files to find all
+ * network connections using a specific port. For each matching connection,
+ * extracts network details and attempts to identify the owning process by
+ * searching for socket inodes in /proc/*/fd/*.
+ *
+ * The function:
+ * 1. Parses each line of the proc file (format: sl, local_address, rem_address, st, etc.)
+ * 2. Filters connections matching the target port
+ * 3. Converts hex addresses to dotted decimal notation
+ * 4. Decodes TCP connection states (ESTABLISHED, LISTEN, etc.)
+ * 5. Searches all /proc/<pid>/fd/* symlinks to find the process owning each socket
+ *
+ * @param filename Path to /proc/net file ("/proc/net/tcp" or "/proc/net/tcp6")
+ * @param target_port Port number to search for
+ * @param connections Output pointer to dynamically allocated array of connections
+ * @param count Output pointer to number of connections found
+ * @return 0 on success, -1 if file cannot be opened
  */
 static int parse_proc_net(const char *filename, int target_port,
                          connection_info_t **connections, int *count) {
@@ -189,6 +230,21 @@ found_pid:
 
 /**
  * Get all connections on a specific port (Linux)
+ *
+ * Retrieves all TCP and TCP6 network connections using the specified port by
+ * parsing /proc/net/tcp and /proc/net/tcp6 files. Combines results from both
+ * IPv4 and IPv6 connections into a single array.
+ *
+ * The function:
+ * 1. Parses /proc/net/tcp for IPv4 connections
+ * 2. Parses /proc/net/tcp6 for IPv6 connections
+ * 3. Merges both results into a single output array
+ * 4. Allocates memory for the connection array (caller must free)
+ *
+ * @param port Port number to query
+ * @param connections Output pointer to dynamically allocated array of connections
+ * @param count Output pointer to total number of connections found
+ * @return 0 on success
  */
 int platform_get_port_connections(int port, connection_info_t **connections, int *count) {
     int total = 0;
@@ -222,6 +278,27 @@ int platform_get_port_connections(int port, connection_info_t **connections, int
 
 /**
  * Get information about a process (Linux)
+ *
+ * Retrieves comprehensive process information by reading multiple files in /proc/<pid>/.
+ * Gathers details about process state, parent, user, memory usage, command line, and
+ * uptime from various proc filesystem entries.
+ *
+ * Data sources:
+ * - /proc/<pid>/stat: PID, name, state, PPID, start time (in ticks)
+ * - /proc/stat: System boot time (btime) for calculating absolute start time
+ * - /proc/<pid>/status: UID, virtual memory size (VmSize), resident memory (VmRSS)
+ * - /proc/<pid>/cmdline: Full command line with arguments
+ * - getpwuid(): Username lookup from UID
+ *
+ * The function handles:
+ * - Converting tick-based start time to Unix timestamp
+ * - Replacing null bytes in cmdline with spaces
+ * - Trimming trailing whitespace
+ * - Graceful handling of missing or inaccessible files
+ *
+ * @param pid Process ID to query
+ * @param info Pointer to process_info_t structure to populate
+ * @return 0 on success, -1 if process doesn't exist or /proc/<pid>/stat cannot be read
  */
 int platform_get_process_info(pid_t pid, process_info_t *info) {
     memset(info, 0, sizeof(*info));
@@ -323,6 +400,22 @@ int platform_get_process_info(pid_t pid, process_info_t *info) {
 
 /**
  * Get environment variables for a process (Linux)
+ *
+ * Reads and parses the /proc/<pid>/environ file to extract all environment
+ * variables for a specific process. The environ file contains null-separated
+ * strings in "NAME=value" format.
+ *
+ * The function:
+ * 1. Reads entire /proc/<pid>/environ file into memory
+ * 2. Counts environment variables by counting null byte separators
+ * 3. Allocates array for storing individual variable strings
+ * 4. Splits buffer at null bytes and duplicates each variable string
+ * 5. Returns dynamically allocated array (caller must free using platform_free_env_vars)
+ *
+ * @param pid Process ID to query
+ * @param env_vars Output pointer to dynamically allocated array of environment variable strings
+ * @param count Output pointer to number of environment variables found
+ * @return 0 on success, -1 if /proc/<pid>/environ cannot be opened (permission denied or process doesn't exist)
  */
 int platform_get_process_env(pid_t pid, char ***env_vars, int *count) {
     char env_path[64];
@@ -377,6 +470,26 @@ int platform_get_process_env(pid_t pid, char ***env_vars, int *count) {
 
 /**
  * Get all connections on a specific port (macOS)
+ *
+ * Retrieves network connections on a specific port by executing lsof (list open files)
+ * command and parsing its output. Uses lsof with the -F flag for parseable output format.
+ *
+ * The function:
+ * 1. Executes "lsof -i :<port> -F pcn" to get processes using the port
+ * 2. Parses lsof output in field format:
+ *    - 'p' lines: Process ID
+ *    - 'c' lines: Command name (not used)
+ *    - 'n' lines: Network address
+ * 3. Builds connection_info_t structures from parsed data
+ * 4. Returns dynamically allocated array (caller must free)
+ *
+ * Note: This is a simplified implementation using lsof as a fallback since
+ * direct sysctl access for network connections on macOS is complex.
+ *
+ * @param port Port number to query
+ * @param connections Output pointer to dynamically allocated array of connections
+ * @param count Output pointer to number of connections found
+ * @return 0 on success, -1 if popen fails
  */
 int platform_get_port_connections(int port, connection_info_t **connections, int *count) {
     /* On macOS, we use lsof as a fallback since direct sysctl for network is complex */
@@ -424,7 +537,7 @@ int platform_get_port_connections(int port, connection_info_t **connections, int
         }
     }
 
-    /* Add last entry */
+    /* Add the last entry */
     if (has_data) {
         if (*count >= capacity) {
             capacity++;
@@ -439,6 +552,27 @@ int platform_get_port_connections(int port, connection_info_t **connections, int
 
 /**
  * Get information about a process (macOS)
+ *
+ * Retrieves comprehensive process information using macOS-specific proc_pidinfo()
+ * system calls. Gathers details about process state, parent, user, memory usage,
+ * path, and uptime from kernel structures.
+ *
+ * Data sources:
+ * - proc_pidinfo(PROC_PIDTBSDINFO): PPID, UID, status, process name, start time
+ * - proc_pidpath(): Full path to process executable
+ * - proc_pidinfo(PROC_PIDTASKINFO): Memory usage (virtual and resident size)
+ * - getpwuid(): Username lookup from UID
+ *
+ * State mapping:
+ * - BSD SIDL (1) -> 'I' (Idle/being created)
+ * - BSD SRUN (2) -> 'R' (Running)
+ * - BSD SSLEEP (3) -> 'S' (Sleeping)
+ * - BSD SSTOP (4) -> 'T' (Stopped)
+ * - BSD SZOMB (5) -> 'Z' (Zombie)
+ *
+ * @param pid Process ID to query
+ * @param info Pointer to process_info_t structure to populate
+ * @return 0 on success, -1 if proc_pidinfo fails (process doesn't exist or no permission)
  */
 int platform_get_process_info(pid_t pid, process_info_t *info) {
     memset(info, 0, sizeof(*info));
@@ -478,13 +612,13 @@ int platform_get_process_info(pid_t pid, process_info_t *info) {
 
     snprintf(info->name, sizeof(info->name), "%s", bsd_info.pbi_name);
 
-    /* Get process start time */
+    /* Get the process start time */
     info->start_time = bsd_info.pbi_start_tvsec;
 
-    /* Get username */
+    /* Get the username */
     get_username_from_uid(info->uid, info->username, sizeof(info->username));
 
-    /* Get command line using proc_pidpath and PROC_PIDPATHINFO */
+    /* Get the command line using proc_pidpath and PROC_PIDPATHINFO */
     char pathbuf[PROC_PIDPATHINFO_MAXSIZE];
     if (proc_pidpath(pid, pathbuf, sizeof(pathbuf)) > 0) {
         snprintf(info->cmdline, sizeof(info->cmdline), "%s", pathbuf);
@@ -502,8 +636,28 @@ int platform_get_process_info(pid_t pid, process_info_t *info) {
 
 /**
  * Get environment variables for a process (macOS)
+ *
+ * Retrieves environment variables for a process by executing ps command with
+ * environment display option. Due to macOS security restrictions, directly
+ * reading process environment is limited, so this uses ps as a workaround.
+ *
+ * The function:
+ * 1. Executes "ps eww -p <pid>" to get process info with full environment
+ * 2. Parses output to find environment variables (identified by '=' character)
+ * 3. Extracts space-separated "NAME=value" pairs
+ * 4. Returns dynamically allocated array (caller must free using platform_free_env_vars)
+ *
+ * Limitations:
+ * - May not work for all processes due to permission restrictions
+ * - Simplified parsing that may miss some edge cases
+ * - Subject to ps output format changes
+ *
+ * @param pid Process ID to query
+ * @param env_vars Output pointer to a dynamically allocated array of environment variable strings
+ * @param count Output pointer to the number of environment variables found
+ * @return 0 on success, -1 if ps command fails or the process doesn't exist
  */
-int platform_get_process_env(pid_t pid, char ***env_vars, int *count) {
+int platform_get_process_env(const pid_t pid, char ***env_vars, int *count) {
     /* On macOS, getting environment variables of other processes is restricted
      * We can try using ps, but it may not work for all processes */
 

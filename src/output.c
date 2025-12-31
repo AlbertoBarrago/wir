@@ -3,12 +3,24 @@
 #include <stdio.h>
 #include <string.h>
 
-/* ============================================================================
- * PROCESS OUTPUT
- * ============================================================================ */
-
 /**
  * Output process info in normal (pretty) format
+ *
+ * Displays detailed process information in a human-readable, colored format.
+ * Shows all available process details including PID, name, user, parent process,
+ * state, uptime, command line, and memory usage.
+ *
+ * Output includes:
+ * - PID and process name
+ * - User information (username and UID)
+ * - Parent process ID
+ * - Process state with human-readable name
+ * - Running time (uptime since process start)
+ * - Full command line (if available)
+ * - Memory usage (VSZ and RSS in KB)
+ *
+ * @param info Pointer to process_info_t structure containing process details
+ * @return void
  */
 static void output_process_normal(const process_info_t *info) {
     print_color(COLOR_BOLD, "Process Information\n");
@@ -42,7 +54,13 @@ static void output_process_normal(const process_info_t *info) {
 }
 
 /**
- * Output process info in short (one-line) format
+ * Output process info in a short (one-line) format
+ *
+ * Displays concise process information in a single line, useful for quick
+ * overview or when space is limited. Format: "PID <pid>: <name>[<ppid>] by <user> - <cmdline>"
+ *
+ * @param info Pointer to process_info_t structure containing process details
+ * @return void
  */
 static void output_process_short(const process_info_t *info) {
     printf("PID %d: %s[%d] by %s - %s\n",
@@ -52,6 +70,20 @@ static void output_process_short(const process_info_t *info) {
 
 /**
  * Output process info in JSON format
+ *
+ * Serializes process information as a JSON object for programmatic consumption.
+ * Includes all process details in a structured format suitable for parsing,
+ * logging, or integration with other tools.
+ *
+ * JSON structure includes:
+ * - pid, name, ppid, user, uid
+ * - state (character code) and state_name (human-readable)
+ * - start_time (epoch timestamp) and uptime (formatted string)
+ * - cmdline (full command line)
+ * - memory object with vsz_kb and rss_kb
+ *
+ * @param info Pointer to process_info_t structure containing process details
+ * @return void
  */
 static void output_process_json(const process_info_t *info) {
     char uptime_buf[128];
@@ -76,7 +108,24 @@ static void output_process_json(const process_info_t *info) {
 }
 
 /**
- * Output process information
+ * Output process information with format selection
+ *
+ * Main entry point for displaying process information. Selects the appropriate
+ * output format based on command-line arguments (JSON, short, or normal).
+ * Optionally prompts for interactive process termination if --interactive
+ * flag is enabled.
+ *
+ * Format selection:
+ * - JSON format if args->json_output is true
+ * - Short (one-line) format if args->short_output is true
+ * - Normal (pretty) format otherwise
+ *
+ * Interactive mode:
+ * - If args->interactive is true and not JSON output, prompts user to kill process
+ *
+ * @param info Pointer to process_info_t structure containing process details
+ * @param args Pointer to cli_args_t structure containing output format flags
+ * @return 0 on success
  */
 int output_process_info(const process_info_t *info, const cli_args_t *args) {
     if (args->json_output) {
@@ -100,7 +149,24 @@ int output_process_info(const process_info_t *info, const cli_args_t *args) {
  * ============================================================================ */
 
 /**
- * Recursively print process tree
+ * Recursively print a process tree in ASCII art format
+ *
+ * Renders a process ancestry tree using box-drawing characters (├─ and └─)
+ * to show parent-child relationships. Recursively traverses up the tree from
+ * the target process to the root ancestor, displaying each process with
+ * indentation and tree symbols.
+ *
+ * Tree visualization:
+ * - Uses "├─" for non-last branches
+ * - Uses "└─" for last branches
+ * - Indents with two spaces per depth level
+ * - Colors process names in green
+ * - Shows PID in brackets and username in parentheses
+ *
+ * @param node Pointer to process_tree_node_t to print (NULL-safe)
+ * @param depth Current depth level in tree (0 = root)
+ * @param is_last Boolean indicating if this is the last child at current depth
+ * @return void
  */
 static void print_tree_recursive(const process_tree_node_t *node, int depth, bool is_last) {
     if (!node) {
@@ -133,7 +199,20 @@ static void print_tree_recursive(const process_tree_node_t *node, int depth, boo
 }
 
 /**
- * Output process tree in JSON format
+ * Output process tree in JSON format recursively
+ *
+ * Serializes a process ancestry tree as nested JSON objects. Each node contains
+ * pid, name, user, and optionally a nested parent object. The recursion travels
+ * up the tree, with each parent embedded within its child.
+ *
+ * JSON structure:
+ * - Each node has: pid, name, user
+ * - If parent exists, includes "parent" key with nested parent object
+ * - Proper indentation based on depth for readability
+ *
+ * @param node Pointer to process_tree_node_t to serialize (NULL-safe)
+ * @param depth Current depth level for indentation (0 = root)
+ * @return void
  */
 static void output_tree_json_recursive(const process_tree_node_t *node, int depth) {
     if (!node) {
@@ -169,7 +248,19 @@ static void output_tree_json_recursive(const process_tree_node_t *node, int dept
 }
 
 /**
- * Output process tree
+ * Output process tree with format selection
+ *
+ * Main entry point for displaying process ancestry tree. Shows the complete
+ * lineage from the target process up to its root ancestor (typically init/PID 1).
+ * Selects output format based on command-line arguments.
+ *
+ * Format selection:
+ * - JSON format if args->json_output is true
+ * - ASCII tree format (with box-drawing characters) otherwise
+ *
+ * @param tree Pointer to process_tree_node_t representing the target process (leaf of tree)
+ * @param args Pointer to cli_args_t structure containing output format flags
+ * @return 0 on success, -1 if tree is NULL
  */
 int output_process_tree(const process_tree_node_t *tree, const cli_args_t *args) {
     if (!tree) {
@@ -192,7 +283,25 @@ int output_process_tree(const process_tree_node_t *tree, const cli_args_t *args)
  * ============================================================================ */
 
 /**
- * Output environment variables
+ * Output environment variables for a process
+ *
+ * Displays all environment variables from a process. In normal mode, formats
+ * variables with colored names and values separated by '='. In JSON mode,
+ * outputs as an array with count.
+ *
+ * Normal format:
+ * - Header showing total count
+ * - Each variable with colored name (cyan) and value
+ * - Temporarily modifies string to split at '=' for formatting
+ *
+ * JSON format:
+ * - Array of environment variable strings
+ * - Total count field
+ *
+ * @param env_vars Array of environment variable strings (format: "NAME=value")
+ * @param count Number of environment variables in array
+ * @param args Pointer to cli_args_t structure containing output format flags
+ * @return 0 on success
  */
 int output_process_env(char **env_vars, int count, const cli_args_t *args) {
     if (args->json_output) {
@@ -233,6 +342,19 @@ int output_process_env(char **env_vars, int count, const cli_args_t *args) {
 
 /**
  * Check if connection has warning conditions
+ *
+ * Evaluates whether a network connection and its associated process exhibit
+ * potentially problematic conditions that warrant user attention.
+ *
+ * Warning conditions:
+ * - Process running as root (UID 0) on non-system port (>= 1024)
+ *   This is a security concern as privileged processes shouldn't bind to user ports
+ * - Process is in zombie state (state 'Z')
+ *   Zombie processes holding ports indicate improper cleanup
+ *
+ * @param conn Pointer to connection_info_t structure
+ * @param proc Pointer to process_info_t structure (NULL-safe)
+ * @return true if warning conditions exist, false otherwise
  */
 static bool has_warning(const connection_info_t *conn, const process_info_t *proc) {
     /* Running as root on non-system ports */
@@ -249,7 +371,22 @@ static bool has_warning(const connection_info_t *conn, const process_info_t *pro
 }
 
 /**
- * Output port info in normal format
+ * Output port info in normal (detailed) format
+ *
+ * Displays comprehensive information about all connections on a port in a
+ * human-readable format. For each connection, shows network details and
+ * associated process information. Displays warnings for security concerns.
+ *
+ * For each connection shows:
+ * - Protocol (TCP/UDP) and state
+ * - Local and remote addresses with ports
+ * - Process details (name, PID, user, command)
+ * - Security warnings if applicable (root on user port, zombie process)
+ *
+ * @param port Port number being queried
+ * @param connections Array of connection_info_t structures
+ * @param count Number of connections in array
+ * @return void
  */
 static void output_port_normal(int port, const connection_info_t *connections, int count) {
     print_color(COLOR_BOLD, "Port %d Connections (%d found)\n", port, count);
@@ -291,7 +428,15 @@ static void output_port_normal(int port, const connection_info_t *connections, i
 }
 
 /**
- * Output port info in short format
+ * Output port info in short (one-line per connection) format
+ *
+ * Displays concise information about port connections, one line per connection.
+ * Format: "Port <port>: <process>[<pid>] by <user> (<state>)"
+ *
+ * @param port Port number being queried
+ * @param connections Array of connection_info_t structures
+ * @param count Number of connections in array
+ * @return void
  */
 static void output_port_short(int port, const connection_info_t *connections, int count) {
     for (int i = 0; i < count; i++) {
@@ -311,6 +456,22 @@ static void output_port_short(int port, const connection_info_t *connections, in
 
 /**
  * Output port info in JSON format
+ *
+ * Serializes port connection information as JSON for programmatic consumption.
+ * Includes port number, connection count, and array of connection objects with
+ * full network and process details.
+ *
+ * JSON structure:
+ * - port: port number
+ * - connection_count: total connections
+ * - connections: array of connection objects
+ *   Each connection includes: protocol, state, addresses, ports
+ *   If process info available: nested process object with pid, name, user, cmdline
+ *
+ * @param port Port number being queried
+ * @param connections Array of connection_info_t structures
+ * @param count Number of connections in array
+ * @return void
  */
 static void output_port_json(int port, const connection_info_t *connections, int count) {
     printf("{\n");
@@ -355,6 +516,19 @@ static void output_port_json(int port, const connection_info_t *connections, int
 
 /**
  * Output port info in warnings-only format
+ *
+ * Analyzes port connections for security concerns and displays only warnings.
+ * If no issues found, displays success message. Useful for security auditing.
+ *
+ * Checks for:
+ * - Processes running as root on non-system ports (>= 1024)
+ * - Zombie processes holding ports
+ * - Multiple processes listening on same port (potential conflict)
+ *
+ * @param port Port number being queried
+ * @param connections Array of connection_info_t structures
+ * @param count Number of connections in array
+ * @return void
  */
 static void output_port_warnings(int port, const connection_info_t *connections, int count) {
     bool found_warning = false;
@@ -396,7 +570,26 @@ static void output_port_warnings(int port, const connection_info_t *connections,
 }
 
 /**
- * Output port information
+ * Output port information with format selection
+ *
+ * Main entry point for displaying port connection information. Selects output
+ * format based on command-line arguments. Returns error if no connections found.
+ * Optionally prompts for interactive process termination.
+ *
+ * Format selection priority:
+ * 1. Warnings-only if args->warnings_only is true
+ * 2. JSON if args->json_output is true
+ * 3. Short if args->short_output is true
+ * 4. Normal (detailed) format otherwise
+ *
+ * Interactive mode:
+ * - If args->interactive is true, prompts to kill first process on port
+ *
+ * @param port Port number being queried
+ * @param connections Array of connection_info_t structures
+ * @param count Number of connections in array
+ * @param args Pointer to cli_args_t structure containing output format flags
+ * @return 0 on success, -1 if no connections found
  */
 int output_port_info(int port, const connection_info_t *connections,
                      int count, const cli_args_t *args) {
@@ -434,7 +627,22 @@ int output_port_info(int port, const connection_info_t *connections,
  * ============================================================================ */
 
 /**
- * Output process list in normal format
+ * Output process list in normal (table) format
+ *
+ * Displays all processes in a formatted table with headers and aligned columns.
+ * Shows PID, PPID, name, user, and command line. Includes header row with
+ * column names and separator line. Total count displayed at bottom.
+ *
+ * Table columns:
+ * - PID: Process ID (8 chars wide)
+ * - PPID: Parent Process ID (8 chars wide)
+ * - NAME: Process name (20 chars wide, colored green)
+ * - USER: Username (12 chars wide, colored cyan)
+ * - COMMAND: Command line (60 chars max)
+ *
+ * @param processes Array of process_info_t structures
+ * @param count Number of processes in array
+ * @return void
  */
 static void output_process_list_normal(const process_info_t *processes, int count) {
     print_color(COLOR_BOLD, "Running Processes (%d total)\n", count);
@@ -459,6 +667,13 @@ static void output_process_list_normal(const process_info_t *processes, int coun
 
 /**
  * Output process list in short format (one per line)
+ *
+ * Displays minimal process information, one line per process.
+ * Format: "<pid>: <name> by <user>"
+ *
+ * @param processes Array of process_info_t structures
+ * @param count Number of processes in array
+ * @return void
  */
 static void output_process_list_short(const process_info_t *processes, int count) {
     for (int i = 0; i < count; i++) {
@@ -469,6 +684,20 @@ static void output_process_list_short(const process_info_t *processes, int count
 
 /**
  * Output process list in JSON format
+ *
+ * Serializes all processes as a JSON object containing process count and array
+ * of process objects. Each process object includes complete details like PID,
+ * name, user, state, uptime, memory usage, etc.
+ *
+ * JSON structure:
+ * - process_count: total number of processes
+ * - processes: array of process objects
+ *   Each process includes: pid, ppid, name, user, uid, state, state_name,
+ *   start_time, uptime, cmdline, memory (with vsz_kb and rss_kb)
+ *
+ * @param processes Array of process_info_t structures
+ * @param count Number of processes in array
+ * @return void
  */
 static void output_process_list_json(const process_info_t *processes, int count) {
     printf("{\n");
@@ -503,7 +732,20 @@ static void output_process_list_json(const process_info_t *processes, int count)
 }
 
 /**
- * Output list of all processes
+ * Output list of all processes with format selection
+ *
+ * Main entry point for displaying system-wide process list. Selects output
+ * format based on command-line arguments. Returns error if no processes found.
+ *
+ * Format selection:
+ * - JSON format if args->json_output is true
+ * - Short (one-line) format if args->short_output is true
+ * - Normal (table) format otherwise
+ *
+ * @param processes Array of process_info_t structures
+ * @param count Number of processes in array
+ * @param args Pointer to cli_args_t structure containing output format flags
+ * @return 0 on success, -1 if no processes found
  */
 int output_process_list(const process_info_t *processes, int count,
                         const cli_args_t *args) {

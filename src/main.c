@@ -5,7 +5,21 @@
 #include "utils.h"
 
 /**
- * Handle --pid operation
+ * Handle --pid operation to display process information
+ *
+ * Retrieves and displays information about a specific process identified by PID.
+ * Supports multiple output modes based on the provided arguments:
+ * - Environment variables mode (--env): Shows all environment variables
+ * - Process tree mode (--tree): Shows full process ancestry tree
+ * - Default mode: Shows basic process information
+ *
+ * Error handling:
+ * - Returns EXIT_FAILURE if a process doesn't exist or access is denied
+ * - Cleans up allocated resources (env_vars, tree) before returning
+ * - Provides helpful error messages to guide the user
+ *
+ * @param args Pointer to cli_args_t structure containing parsed arguments with PID and output mode flags
+ * @return EXIT_SUCCESS (0) on successful display, EXIT_FAILURE (1) on error
  */
 static int handle_pid_operation(const cli_args_t *args) {
     /* Get basic process information */
@@ -32,7 +46,7 @@ static int handle_pid_operation(const cli_args_t *args) {
         platform_free_env_vars(env_vars, count);
     }
     else if (args->show_tree) {
-        /* Show process ancestry tree */
+        /* Show the process ancestry tree */
         process_tree_node_t *tree = NULL;
 
         if (platform_get_process_tree(args->pid, &tree) < 0) {
@@ -52,7 +66,25 @@ static int handle_pid_operation(const cli_args_t *args) {
 }
 
 /**
- * Handle --port operation
+ * Handle --port operation to display port usage information
+ *
+ * Queries the system for all network connections using a specific port number.
+ * Retrieves connection information including process IDs, connection states,
+ * and related details. The output can be filtered to show only warnings
+ * using the --warnings flag.
+ *
+ * The function:
+ * 1. Queries all connections on the specified port
+ * 2. Formats and displays the connection information
+ * 3. Properly frees allocated memory regardless of success or failure
+ *
+ * Error handling:
+ * - Returns EXIT_FAILURE if a port query fails (may need elevated privileges)
+ * - Ensures connections array is freed even on error
+ * - Provides informative error messages about privilege requirements
+ *
+ * @param args Pointer to cli_args_t structure containing the port number and output flags
+ * @return EXIT_SUCCESS (0) on successful display, EXIT_FAILURE (1) on error
  */
 static int handle_port_operation(const cli_args_t *args) {
     connection_info_t *connections = NULL;
@@ -67,14 +99,31 @@ static int handle_port_operation(const cli_args_t *args) {
     }
 
     /* Output the results */
-    int result = output_port_info(args->port, connections, count, args);
+    const int result = output_port_info(args->port, connections, count, args);
 
     free(connections);
     return result == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 
 /**
- * Handle --all operation
+ * Handle --all operation to display all running processes
+ *
+ * Retrieves a list of all currently running processes on the system and
+ * displays them according to the specified output format (short, JSON, or
+ * standard). This provides a system-wide view of process activity.
+ *
+ * The function:
+ * 1. Fetches complete list of running processes from platform layer
+ * 2. Passes the process list to output formatter
+ * 3. Cleans up allocated memory before returning
+ *
+ * Error handling:
+ * - Returns EXIT_FAILURE if unable to retrieve process list
+ * - Ensures processes array is freed even on error
+ * - Provides error message if retrieval fails
+ *
+ * @param args Pointer to cli_args_t structure containing output format flags (short_output, json_output)
+ * @return EXIT_SUCCESS (0) on successful display, EXIT_FAILURE (1) on error
  */
 static int handle_all_operation(const cli_args_t *args) {
     process_info_t *processes = NULL;
@@ -95,7 +144,31 @@ static int handle_all_operation(const cli_args_t *args) {
 }
 
 /**
- * Main entry point
+ * Main entry point of the application
+ *
+ * Orchestrates the complete application flow from argument parsing to cleanup:
+ * 1. Parses command-line arguments using parse_args()
+ * 2. Handles special modes (help, version) and exits early if needed
+ * 3. Validates argument consistency using validate_args()
+ * 4. Applies global settings (color output)
+ * 5. Initializes platform-specific subsystems
+ * 6. Dispatches to appropriate handler based on operation mode (PID, PORT, ALL)
+ * 7. Performs cleanup before exit
+ *
+ * Exit codes:
+ * - EXIT_SUCCESS (0): Operation completed successfully
+ * - EXIT_FAILURE (1): Error occurred (parse error, validation failure, or operation failure)
+ *
+ * Operation modes:
+ * - MODE_HELP: Display usage information and exit
+ * - MODE_VERSION: Display version information and exit
+ * - MODE_PID: Analyze specific process by PID
+ * - MODE_PORT: Analyze port usage
+ * - MODE_ALL: List all running processes
+ *
+ * @param argc Argument count from shell
+ * @param argv Argument vector from shell
+ * @return EXIT_SUCCESS on success, EXIT_FAILURE on error
  */
 int main(int argc, char **argv) {
     cli_args_t args;

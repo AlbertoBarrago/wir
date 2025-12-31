@@ -6,7 +6,18 @@
 #include <string.h>
 
 /**
- * Print version information
+ * Print version information to standard output
+ *
+ * Displays the application name, version number, description, and author
+ * information. This function is called when the user runs the program with
+ * the --version or -v flag.
+ *
+ * Output format:
+ * - Line 1: Application name and version
+ * - Line 2: Description
+ * - Line 3: Author information
+ *
+ * @return void
  */
 void print_version(void) {
   printf("%s version %s\n", WIR_NAME, WIR_VERSION);
@@ -15,7 +26,23 @@ void print_version(void) {
 }
 
 /**
- * Print usage/help message
+ * Print usage/help message to standard output
+ *
+ * Displays comprehensive help information including program description,
+ * usage syntax, all available command-line options with descriptions,
+ * and practical usage examples. This function is called when:
+ * - The user runs the program with --help or -h flag
+ * - The user runs the program without any arguments
+ * - The user provides invalid arguments
+ *
+ * The help output includes:
+ * - Program name, version, and description header
+ * - Usage syntax showing how to invoke the program
+ * - Detailed list of all available options with explanations
+ * - Multiple practical examples demonstrating common use cases
+ *
+ * @param program_name Name of the program executable (typically argv[0])
+ * @return void
  */
 void print_usage(const char *program_name) {
   printf("%s v%s - %s\n", WIR_NAME, WIR_VERSION, WIR_DESCRIPTION);
@@ -47,24 +74,34 @@ void print_usage(const char *program_name) {
 }
 
 /**
- * Parse a string to an integer with error checking
- * @param str String to parse
- * @param out Output integer
- * @return 0 on success, -1 on error
+ * Parse a string to an integer with comprehensive error checking
+ *
+ * Converts a string representation of a number to an integer value using
+ * strtol() with full validation. This function is used internally to parse
+ * numeric arguments like PID and port numbers from command-line input.
+ *
+ * Error checking includes:
+ * - Range validation: ensures value fits within INT_MIN to INT_MAX
+ * - Format validation: ensures the entire string is a valid number
+ * - Overflow detection: checks for ERANGE errno from strtol()
+ * - Empty string detection: ensures string contains at least one digit
+ * - Trailing characters: ensures no invalid characters after the number
+ *
+ * @param str String to parse (should contain only a valid decimal integer)
+ * @param out Pointer to integer where the parsed value will be stored
+ * @return 0 on success (valid integer parsed), -1 on error (invalid format, overflow, or out of range)
  */
 static int parse_int(const char *str, int *out) {
-  char *endptr;
-  long val;
-
+  char *endPtr;
+  const long val = strtol(str, &endPtr, 10);
   errno = 0;
-  val = strtol(str, &endptr, 10);
 
   /* Check for various error conditions */
   if (errno == ERANGE || val > INT_MAX || val < INT_MIN) {
     return -1;
   }
 
-  if (endptr == str || *endptr != '\0') {
+  if (endPtr == str || *endPtr != '\0') {
     return -1;
   }
 
@@ -73,10 +110,33 @@ static int parse_int(const char *str, int *out) {
 }
 
 /**
- * Parse command-line arguments
+ * Parse command-line arguments and populate the cli_args_t structure
+ *
+ * Processes command-line arguments to determine the operating mode and flags.
+ * Initializes the args structure with default values, then parses each argument
+ * to set appropriate modes and options. Handles special cases like --help and
+ * --version which return immediately.
+ *
+ * Supported arguments:
+ * - --help, -h: Display help message
+ * - --version, -v: Display version information
+ * - --pid <n>: Analyze specific process ID
+ * - --port <n>: Analyze processes using specific port
+ * - --all: List all running processes
+ * - --short: One-line summary output
+ * - --tree: Show full process ancestry tree
+ * - --json: Output in JSON format
+ * - --warnings: Show only warnings
+ * - --no-color: Disable colorized output
+ * - --env: Show environment variables
+ * - --interactive, -i: Enable interactive mode
+ *
+ * @param argc Argument count from main()
+ * @param argv Argument vector from main()
+ * @param args Pointer to cli_args_t structure to populate with parsed arguments
+ * @return 0 on success, -1 on error (invalid argument, missing value, or parse failure)
  */
-int parse_args(int argc, char **argv, cli_args_t *args) {
-  /* Initialize args to defaults */
+int parse_args(const int argc, char **argv, cli_args_t *args) {
   memset(args, 0, sizeof(*args));
   args->mode = MODE_NONE;
   args->port = -1;
@@ -95,10 +155,12 @@ int parse_args(int argc, char **argv, cli_args_t *args) {
     if (strcmp(arg, "--help") == 0 || strcmp(arg, "-h") == 0) {
       args->mode = MODE_HELP;
       return 0;
-    } else if (strcmp(arg, "--version") == 0 || strcmp(arg, "-v") == 0) {
+    }
+    if (strcmp(arg, "--version") == 0 || strcmp(arg, "-v") == 0) {
       args->mode = MODE_VERSION;
       return 0;
-    } else if (strcmp(arg, "--all") == 0) {
+    }
+    if (strcmp(arg, "--all") == 0) {
       if (args->mode == MODE_NONE) {
         args->mode = MODE_ALL;
       }
@@ -140,7 +202,7 @@ int parse_args(int argc, char **argv, cli_args_t *args) {
         return -1;
       }
 
-      args->pid = (pid_t)pid;
+      args->pid = pid;
       if (args->mode == MODE_NONE) {
         args->mode = MODE_PID;
       }
@@ -168,7 +230,27 @@ int parse_args(int argc, char **argv, cli_args_t *args) {
 }
 
 /**
- * Validate parsed arguments for logical consistency
+ * Validate parsed arguments for logical consistency and compatibility
+ *
+ * Performs semantic validation on the parsed command-line arguments to ensure
+ * they form a valid and consistent configuration. This function is called after
+ * parse_args() to catch logical conflicts between options that are individually
+ * valid but cannot be used together.
+ *
+ * Validation rules enforced:
+ * - Mode requirement: Must specify --port, --pid, or --all (unless help/version)
+ * - Mode exclusivity: Cannot combine --port and --pid together
+ * - Mode exclusivity: Cannot combine --all with --port or --pid
+ * - Output format limit: Cannot use multiple output formats simultaneously
+ *   (--short, --json, --tree, --env are mutually exclusive)
+ * - Context validation: --env requires --pid mode
+ * - Context validation: --tree requires --pid mode
+ * - Context validation: --warnings requires --port mode
+ * - Context validation: --interactive requires --pid or --port mode
+ * - Compatibility: --interactive cannot be used with --json
+ *
+ * @param args Pointer to cli_args_t structure containing parsed arguments
+ * @return 0 if arguments are valid and consistent, -1 if validation fails
  */
 int validate_args(const cli_args_t *args) {
   /* Must have either --port, --pid, or --all (unless showing help) */
@@ -218,7 +300,7 @@ int validate_args(const cli_args_t *args) {
     return -1;
   }
 
-  /* --warnings only makes sense with --port */
+  /* --warnings only make sense with --port */
   if (args->warnings_only && args->mode != MODE_PORT) {
     print_error("--warnings can only be used with --port");
     return -1;
