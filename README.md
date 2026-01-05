@@ -14,7 +14,7 @@ A cross-platform CLI tool written in C to inspect what's running on specific por
 - Check what process is using a specific port
 - Get detailed information about a process by PID
 - List all running processes on the system
-- Show full process ancestry tree
+- Show the full process ancestry tree
 - Display process environment variables
 - Interactive mode to kill processes with a keypress
 - **Human-readable process states** (e.g., "Running (R)" instead of just "R")
@@ -47,7 +47,7 @@ brew install wir
 make
 ```
 
-For debug build with symbols:
+To debug the build with symbols:
 
 ```bash
 make debug
