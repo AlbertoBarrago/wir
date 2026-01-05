@@ -238,4 +238,4 @@ sudo wir --port 80
 
 ## Acknowledgments
 
-Built as a learning project to understand system programming in C.
+Built as a learning project to understand system programming in C, with the support of Claude Code.  
