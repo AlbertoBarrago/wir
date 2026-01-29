@@ -62,6 +62,11 @@ static int handle_pid_operation(const cli_args_t *args) {
         output_process_info(&info, args);
     }
 
+    /* Interactive mode - prompt to kill process (works with all output modes) */
+    if (args->interactive && !args->json_output) {
+        prompt_kill_process(info.pid, info.name);
+    }
+
     return EXIT_SUCCESS;
 }
 
