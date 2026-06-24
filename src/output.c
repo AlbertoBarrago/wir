@@ -3,6 +3,47 @@
 #include <stdio.h>
 #include <string.h>
 
+static void print_json_string(const char *value) {
+    putchar('"');
+
+    if (value) {
+        for (const unsigned char *p = (const unsigned char *)value; *p; p++) {
+            switch (*p) {
+                case '"':
+                    printf("\\\"");
+                    break;
+                case '\\':
+                    printf("\\\\");
+                    break;
+                case '\b':
+                    printf("\\b");
+                    break;
+                case '\f':
+                    printf("\\f");
+                    break;
+                case '\n':
+                    printf("\\n");
+                    break;
+                case '\r':
+                    printf("\\r");
+                    break;
+                case '\t':
+                    printf("\\t");
+                    break;
+                default:
+                    if (*p < 0x20) {
+                        printf("\\u%04x", *p);
+                    } else {
+                        putchar(*p);
+                    }
+                    break;
+            }
+        }
+    }
+
+    putchar('"');
+}
+
 /**
  * Output process info in normal (pretty) format
  *
@@ -91,15 +132,25 @@ static void output_process_json(const process_info_t *info) {
 
     printf("{\n");
     printf("  \"pid\": %d,\n", info->pid);
-    printf("  \"name\": \"%s\",\n", info->name);
+    printf("  \"name\": ");
+    print_json_string(info->name);
+    printf(",\n");
     printf("  \"ppid\": %d,\n", info->ppid);
-    printf("  \"user\": \"%s\",\n", info->username);
+    printf("  \"user\": ");
+    print_json_string(info->username);
+    printf(",\n");
     printf("  \"uid\": %d,\n", info->uid);
     printf("  \"state\": \"%c\",\n", info->state);
-    printf("  \"state_name\": \"%s\",\n", get_state_name(info->state));
+    printf("  \"state_name\": ");
+    print_json_string(get_state_name(info->state));
+    printf(",\n");
     printf("  \"start_time\": %ld,\n", (long)info->start_time);
-    printf("  \"uptime\": \"%s\",\n", uptime_buf);
-    printf("  \"cmdline\": \"%s\",\n", info->cmdline);
+    printf("  \"uptime\": ");
+    print_json_string(uptime_buf);
+    printf(",\n");
+    printf("  \"cmdline\": ");
+    print_json_string(info->cmdline);
+    printf(",\n");
     printf("  \"memory\": {\n");
     printf("    \"vsz_kb\": %lu,\n", info->vsz);
     printf("    \"rss_kb\": %lu\n", info->rss);
@@ -221,10 +272,13 @@ static void output_tree_json_recursive(const process_tree_node_t *node, int dept
     printf("\"pid\": %d,\n", node->info.pid);
 
     for (int i = 0; i < depth + 1; i++) printf("  ");
-    printf("\"name\": \"%s\",\n", node->info.name);
+    printf("\"name\": ");
+    print_json_string(node->info.name);
+    printf(",\n");
 
     for (int i = 0; i < depth + 1; i++) printf("  ");
-    printf("\"user\": \"%s\"", node->info.username);
+    printf("\"user\": ");
+    print_json_string(node->info.username);
 
     if (node->parent) {
         printf(",\n");
@@ -303,7 +357,8 @@ int output_process_env(char **env_vars, int count, const cli_args_t *args) {
         printf("{\n");
         printf("  \"environment\": [\n");
         for (int i = 0; i < count; i++) {
-            printf("    \"%s\"", env_vars[i]);
+            printf("    ");
+            print_json_string(env_vars[i]);
             if (i < count - 1) {
                 printf(",");
             }
@@ -478,11 +533,19 @@ static void output_port_json(int port, const connection_info_t *connections, int
         const connection_info_t *conn = &connections[i];
 
         printf("    {\n");
-        printf("      \"protocol\": \"%s\",\n", conn->protocol);
-        printf("      \"state\": \"%s\",\n", conn->state);
-        printf("      \"local_address\": \"%s\",\n", conn->local_addr);
+        printf("      \"protocol\": ");
+        print_json_string(conn->protocol);
+        printf(",\n");
+        printf("      \"state\": ");
+        print_json_string(conn->state);
+        printf(",\n");
+        printf("      \"local_address\": ");
+        print_json_string(conn->local_addr);
+        printf(",\n");
         printf("      \"local_port\": %d,\n", conn->local_port);
-        printf("      \"remote_address\": \"%s\",\n", conn->remote_addr);
+        printf("      \"remote_address\": ");
+        print_json_string(conn->remote_addr);
+        printf(",\n");
         printf("      \"remote_port\": %d", conn->remote_port);
 
         if (conn->pid > 0) {
@@ -491,9 +554,15 @@ static void output_port_json(int port, const connection_info_t *connections, int
                 printf(",\n");
                 printf("      \"process\": {\n");
                 printf("        \"pid\": %d,\n", proc.pid);
-                printf("        \"name\": \"%s\",\n", proc.name);
-                printf("        \"user\": \"%s\",\n", proc.username);
-                printf("        \"cmdline\": \"%s\"\n", proc.cmdline);
+                printf("        \"name\": ");
+                print_json_string(proc.name);
+                printf(",\n");
+                printf("        \"user\": ");
+                print_json_string(proc.username);
+                printf(",\n");
+                printf("        \"cmdline\": ");
+                print_json_string(proc.cmdline);
+                printf("\n");
                 printf("      }\n");
             } else {
                 printf("\n");
@@ -715,14 +784,24 @@ static void output_process_list_json(const process_info_t *processes, int count)
         printf("    {\n");
         printf("      \"pid\": %d,\n", proc->pid);
         printf("      \"ppid\": %d,\n", proc->ppid);
-        printf("      \"name\": \"%s\",\n", proc->name);
-        printf("      \"user\": \"%s\",\n", proc->username);
+        printf("      \"name\": ");
+        print_json_string(proc->name);
+        printf(",\n");
+        printf("      \"user\": ");
+        print_json_string(proc->username);
+        printf(",\n");
         printf("      \"uid\": %d,\n", proc->uid);
         printf("      \"state\": \"%c\",\n", proc->state);
-        printf("      \"state_name\": \"%s\",\n", get_state_name(proc->state));
+        printf("      \"state_name\": ");
+        print_json_string(get_state_name(proc->state));
+        printf(",\n");
         printf("      \"start_time\": %ld,\n", (long)proc->start_time);
-        printf("      \"uptime\": \"%s\",\n", uptime_buf);
-        printf("      \"cmdline\": \"%s\",\n", proc->cmdline);
+        printf("      \"uptime\": ");
+        print_json_string(uptime_buf);
+        printf(",\n");
+        printf("      \"cmdline\": ");
+        print_json_string(proc->cmdline);
+        printf(",\n");
         printf("      \"memory\": {\n");
         printf("        \"vsz_kb\": %lu,\n", proc->vsz);
         printf("        \"rss_kb\": %lu\n", proc->rss);

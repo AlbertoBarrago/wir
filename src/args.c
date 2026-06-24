@@ -93,8 +93,8 @@ void print_usage(const char *program_name) {
  */
 static int parse_int(const char *str, int *out) {
   char *endPtr;
-  const long val = strtol(str, &endPtr, 10);
   errno = 0;
+  const long val = strtol(str, &endPtr, 10);
 
   /* Check for various error conditions */
   if (errno == ERANGE || val > INT_MAX || val < INT_MIN) {

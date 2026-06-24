@@ -426,13 +426,30 @@ int platform_get_process_env(pid_t pid, char ***env_vars, int *count) {
         return -1;
     }
 
-    /* Read entire file */
-    fseek(fp, 0, SEEK_END);
-    long size = ftell(fp);
-    fseek(fp, 0, SEEK_SET);
+    /* Read procfs files incrementally: ftell() is not reliable for /proc */
+    size_t capacity = 4096;
+    size_t n = 0;
+    char *buffer = safe_malloc(capacity);
 
-    char *buffer = safe_malloc(size + 1);
-    size_t n = fread(buffer, 1, size, fp);
+    while (!feof(fp)) {
+        if (n == capacity) {
+            capacity *= 2;
+            buffer = safe_realloc(buffer, capacity);
+        }
+
+        size_t bytes_read = fread(buffer + n, 1, capacity - n, fp);
+        n += bytes_read;
+
+        if (ferror(fp)) {
+            free(buffer);
+            fclose(fp);
+            return -1;
+        }
+    }
+
+    if (n == capacity) {
+        buffer = safe_realloc(buffer, capacity + 1);
+    }
     buffer[n] = '\0';
     fclose(fp);
 
@@ -468,6 +485,61 @@ int platform_get_process_env(pid_t pid, char ***env_vars, int *count) {
  * ============================================================================ */
 #elif __APPLE__
 
+static void parse_lsof_endpoint(const char *endpoint, char *addr, size_t addr_size, int *port) {
+    char temp[256];
+    snprintf(temp, sizeof(temp), "%s", endpoint);
+
+    char *start = temp;
+    while (*start == ' ') {
+        start++;
+    }
+
+    char *colon = strrchr(start, ':');
+    if (!colon) {
+        snprintf(addr, addr_size, "%s", start);
+        *port = 0;
+        return;
+    }
+
+    *colon = '\0';
+    *port = atoi(colon + 1);
+    snprintf(addr, addr_size, "%s", *start ? start : "*");
+}
+
+static void parse_lsof_name(const char *name, connection_info_t *conn) {
+    char temp[512];
+    snprintf(temp, sizeof(temp), "%s", name);
+
+    char *state = strrchr(temp, '(');
+    if (state) {
+        char *end = strchr(state, ')');
+        if (end) {
+            *end = '\0';
+            snprintf(conn->state, sizeof(conn->state), "%s", state + 1);
+            *state = '\0';
+        }
+    }
+
+    char *arrow = strstr(temp, "->");
+    if (arrow) {
+        *arrow = '\0';
+        parse_lsof_endpoint(temp, conn->local_addr, sizeof(conn->local_addr), &conn->local_port);
+        parse_lsof_endpoint(arrow + 2, conn->remote_addr, sizeof(conn->remote_addr), &conn->remote_port);
+    } else {
+        parse_lsof_endpoint(temp, conn->local_addr, sizeof(conn->local_addr), &conn->local_port);
+    }
+}
+
+static void append_lsof_connection(connection_info_t **connections, int *count,
+                                   int *capacity, const connection_info_t *current) {
+    if (*count >= *capacity) {
+        *capacity *= 2;
+        *connections = safe_realloc(*connections, *capacity * sizeof(connection_info_t));
+    }
+
+    memcpy(&(*connections)[(*count)++], current, sizeof(*current));
+}
+
 /**
  * Get all connections on a specific port (macOS)
  *
@@ -494,7 +566,7 @@ int platform_get_process_env(pid_t pid, char ***env_vars, int *count) {
 int platform_get_port_connections(int port, connection_info_t **connections, int *count) {
     /* On macOS, we use lsof as a fallback since direct sysctl for network is complex */
     char cmd[256];
-    snprintf(cmd, sizeof(cmd), "lsof -i :%d -F pcn 2>/dev/null", port);
+    snprintf(cmd, sizeof(cmd), "lsof -nP -iTCP:%d -iUDP:%d -F pPnT 2>/dev/null", port, port);
 
     FILE *fp = popen(cmd, "r");
     if (!fp) {
@@ -517,33 +589,28 @@ int platform_get_port_connections(int port, connection_info_t **connections, int
 
         if (line[0] == 'p') {
             /* PID */
-            if (has_data && *count < capacity) {
-                memcpy(&(*connections)[(*count)++], &current, sizeof(current));
-                if (*count >= capacity) {
-                    capacity *= 2;
-                    *connections = safe_realloc(*connections, capacity * sizeof(connection_info_t));
-                }
+            if (has_data) {
+                append_lsof_connection(connections, count, &capacity, &current);
             }
+            memset(&current, 0, sizeof(current));
             current.pid = atoi(line + 1);
             has_data = true;
             current.local_port = port;
-            strcpy(current.protocol, "TCP");
-            strcpy(current.state, "LISTEN");
-        } else if (line[0] == 'c') {
-            /* Command name - not used in connection_info_t */
+            strcpy(current.protocol, "UNKNOWN");
+            strcpy(current.state, "UNKNOWN");
+        } else if (line[0] == 'P') {
+            snprintf(current.protocol, sizeof(current.protocol), "%s", line + 1);
+        } else if (line[0] == 'T' && strncmp(line + 1, "ST=", 3) == 0) {
+            snprintf(current.state, sizeof(current.state), "%s", line + 4);
         } else if (line[0] == 'n') {
             /* Network address */
-            strncpy(current.local_addr, line + 1, sizeof(current.local_addr) - 1);
+            parse_lsof_name(line + 1, &current);
         }
     }
 
     /* Add the last entry */
     if (has_data) {
-        if (*count >= capacity) {
-            capacity++;
-            *connections = safe_realloc(*connections, capacity * sizeof(connection_info_t));
-        }
-        memcpy(&(*connections)[(*count)++], &current, sizeof(current));
+        append_lsof_connection(connections, count, &capacity, &current);
     }
 
     pclose(fp);

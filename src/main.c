@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 #include "args.h"
 #include "platform.h"
 #include "output.h"
@@ -178,6 +179,14 @@ static int handle_all_operation(const cli_args_t *args) {
 int main(int argc, char **argv) {
     cli_args_t args;
     int exit_code = EXIT_SUCCESS;
+
+    /* Apply no-color as early as possible so parse/validation errors honor it */
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--no-color") == 0) {
+            use_colors = false;
+            break;
+        }
+    }
 
     /* Parse command-line arguments */
     if (parse_args(argc, argv, &args) < 0) {
