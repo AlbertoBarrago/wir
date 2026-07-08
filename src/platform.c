@@ -118,7 +118,8 @@ static void inode_map_build(inode_map_t *map) {
             continue;
         }
 
-        char fd_path[256];
+        /* Sized so d_name (up to 255 bytes) can never truncate (-Wformat-truncation) */
+        char fd_path[512];
         snprintf(fd_path, sizeof(fd_path), "/proc/%s/fd", proc_entry->d_name);
 
         DIR *fd_dir = opendir(fd_path);
@@ -130,7 +131,7 @@ static void inode_map_build(inode_map_t *map) {
 
         struct dirent *fd_entry;
         while ((fd_entry = readdir(fd_dir)) != NULL) {
-            char link_path[512];
+            char link_path[1024];
             char link_target[512];
             snprintf(link_path, sizeof(link_path), "%s/%s", fd_path, fd_entry->d_name);
 
@@ -398,8 +399,10 @@ int platform_get_process_info(pid_t pid, process_info_t *info) {
     /* Parse stat file - we need to read more fields to get starttime (field 22) */
     char name[256];
     unsigned long long starttime_ticks;
-    if (fscanf(fp, "%*d (%255[^)]) %c %d %*d %*d %*d %*d %*u %*lu %*lu %*lu %*lu "
-                   "%*lu %*lu %*ld %*ld %*ld %*ld %*ld %*ld %llu",
+    /* Suppressed fields use no length modifier: GCC rejects '*' combined with
+     * 'l' (assignment suppression makes the width meaningless anyway). */
+    if (fscanf(fp, "%*d (%255[^)]) %c %d %*d %*d %*d %*d %*u %*u %*u %*u %*u "
+                   "%*u %*u %*d %*d %*d %*d %*d %*d %llu",
                name, &info->state, &info->ppid, &starttime_ticks) != 4) {
         fclose(fp);
         return -1;
