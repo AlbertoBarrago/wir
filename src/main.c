@@ -182,7 +182,7 @@ int main(int argc, char **argv) {
 
     /* Apply no-color as early as possible so parse/validation errors honor it */
     for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "--no-color") == 0) {
+        if (strcmp(argv[i], "--no-color") == 0 || strcmp(argv[i], "-n") == 0) {
             use_colors = false;
             break;
         }
