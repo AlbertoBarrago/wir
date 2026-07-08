@@ -50,19 +50,19 @@ void print_usage(const char *program_name) {
   printf("Usage: %s [OPTIONS]\n", program_name);
   printf("\n");
   printf("Options:\n");
-  printf("  --pid <n>         Explain a specific PID\n");
-  printf("  --port <n>        Explain port usage\n");
-  printf("  --all             List all running processes\n");
-  printf("  --short           One-line summary\n");
-  printf("  --tree            Show full process ancestry tree\n");
-  printf("  --json            Output result as JSON\n");
-  printf("  --warnings        Show only warnings\n");
-  printf("  --no-color        Disable colorized output\n");
+  printf("  --pid <n>             Explain a specific PID\n");
+  printf("  -p, --port <n>        Explain port usage\n");
+  printf("  -a, --all             List all running processes\n");
+  printf("  -s, --short           One-line summary\n");
+  printf("  -t, --tree            Show full process ancestry tree\n");
+  printf("  -j, --json            Output result as JSON\n");
+  printf("  -w, --warnings        Show only warnings\n");
+  printf("  -n, --no-color        Disable colorized output\n");
   printf(
-      "  --env             Show only environment variables for the process\n");
-  printf("  --interactive     Enable interactive mode (kill process with 'k')\n");
-  printf("  --version         Show version information\n");
-  printf("  --help            Show this help message\n");
+      "  -e, --env             Show only environment variables for the process\n");
+  printf("  -i, --interactive     Enable interactive mode (kill process with 'k')\n");
+  printf("  -v, --version         Show version information\n");
+  printf("  -h, --help            Show this help message\n");
   printf("\n");
   printf("Examples:\n");
   printf("  %s --port 8080\n", program_name);
@@ -121,14 +121,14 @@ static int parse_int(const char *str, int *out) {
  * - --help, -h: Display help message
  * - --version, -v: Display version information
  * - --pid <n>: Analyze specific process ID
- * - --port <n>: Analyze processes using specific port
- * - --all: List all running processes
- * - --short: One-line summary output
- * - --tree: Show full process ancestry tree
- * - --json: Output in JSON format
- * - --warnings: Show only warnings
- * - --no-color: Disable colorized output
- * - --env: Show environment variables
+ * - --port, -p <n>: Analyze processes using specific port
+ * - --all, -a: List all running processes
+ * - --short, -s: One-line summary output
+ * - --tree, -t: Show full process ancestry tree
+ * - --json, -j: Output in JSON format
+ * - --warnings, -w: Show only warnings
+ * - --no-color, -n: Disable colorized output
+ * - --env, -e: Show environment variables
  * - --interactive, -i: Enable interactive mode
  *
  * @param argc Argument count from main()
@@ -160,11 +160,11 @@ int parse_args(const int argc, char **argv, cli_args_t *args) {
       args->mode = MODE_VERSION;
       return 0;
     }
-    if (strcmp(arg, "--all") == 0) {
+    if (strcmp(arg, "--all") == 0 || strcmp(arg, "-a") == 0) {
       if (args->mode == MODE_NONE) {
         args->mode = MODE_ALL;
       }
-    } else if (strcmp(arg, "--port") == 0) {
+    } else if (strcmp(arg, "--port") == 0 || strcmp(arg, "-p") == 0) {
       if (i + 1 >= argc) {
         print_error("--port requires an argument");
         return -1;
@@ -206,17 +206,17 @@ int parse_args(const int argc, char **argv, cli_args_t *args) {
       if (args->mode == MODE_NONE) {
         args->mode = MODE_PID;
       }
-    } else if (strcmp(arg, "--short") == 0) {
+    } else if (strcmp(arg, "--short") == 0 || strcmp(arg, "-s") == 0) {
       args->short_output = true;
-    } else if (strcmp(arg, "--tree") == 0) {
+    } else if (strcmp(arg, "--tree") == 0 || strcmp(arg, "-t") == 0) {
       args->show_tree = true;
-    } else if (strcmp(arg, "--json") == 0) {
+    } else if (strcmp(arg, "--json") == 0 || strcmp(arg, "-j") == 0) {
       args->json_output = true;
-    } else if (strcmp(arg, "--warnings") == 0) {
+    } else if (strcmp(arg, "--warnings") == 0 || strcmp(arg, "-w") == 0) {
       args->warnings_only = true;
-    } else if (strcmp(arg, "--no-color") == 0) {
+    } else if (strcmp(arg, "--no-color") == 0 || strcmp(arg, "-n") == 0) {
       args->no_color = true;
-    } else if (strcmp(arg, "--env") == 0) {
+    } else if (strcmp(arg, "--env") == 0 || strcmp(arg, "-e") == 0) {
       args->show_env = true;
     } else if (strcmp(arg, "--interactive") == 0 || strcmp(arg, "-i") == 0) {
       args->interactive = true;
