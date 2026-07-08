@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: Build & smoke test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build (release)
+        run: make
+
+      - name: Build (debug)
+        run: make debug
+
+      - name: Smoke test
+        run: |
+          set -euo pipefail
+          ./wir --version
+          ./wir --help
+          ./wir --all --short
+          # Short flags must behave like their long form
+          ./wir -a -s
