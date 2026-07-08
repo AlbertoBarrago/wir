@@ -11,7 +11,7 @@ A cross-platform CLI tool written in C to inspect what's running on specific por
 
 ## Features
 
-- Check what process is using a specific port
+- Check what process is using a specific port (**TCP and UDP**)
 - Get detailed information about a process by PID
 - List all running processes on the system
 - Show the full process ancestry tree
@@ -23,6 +23,7 @@ A cross-platform CLI tool written in C to inspect what's running on specific por
 - Security warnings for potentially risky configurations
 - Cross-platform support (macOS and Linux)
 - Colorized output (can be disabled)
+- **Short flags** for every option (e.g. `-p` for `--port`)
 
 ## Installation
 
@@ -76,16 +77,19 @@ wir [OPTIONS]
 ### Options
 
 - `--pid <n>` - Explain a specific PID
-- `--port <n>` - Explain port usage
-- `--all` - List all running processes
-- `--short` - One-line summary
-- `--tree` - Show full process ancestry tree
-- `--json` - Output result as JSON
-- `--warnings` - Show only warnings (port mode only)
-- `--no-color` - Disable colorized output
-- `--env` - Show only environment variables (PID mode only)
-- `--interactive` or `-i` - Enable interactive mode (kill process with 'k' or 'q' to quit)
-- `--help` - Show help message
+- `-p`, `--port <n>` - Explain port usage (TCP and UDP)
+- `-a`, `--all` - List all running processes
+- `-s`, `--short` - One-line summary
+- `-t`, `--tree` - Show full process ancestry tree
+- `-j`, `--json` - Output result as JSON
+- `-w`, `--warnings` - Show only warnings (port mode only)
+- `-n`, `--no-color` - Disable colorized output
+- `-e`, `--env` - Show only environment variables (PID mode only)
+- `-i`, `--interactive` - Enable interactive mode (kill process with 'k' or 'q' to quit)
+- `-v`, `--version` - Show version information
+- `-h`, `--help` - Show help message
+
+> Note: `--pid` has no short flag, since `-p` maps to `--port`.
 
 ### Examples
 
@@ -93,6 +97,8 @@ wir [OPTIONS]
 
 ```bash
 wir --port 8080
+# or, using the short flag
+wir -p 8080
 ```
 
 #### Get info about a specific process
@@ -157,14 +163,14 @@ Press 'k' to kill the process, 'q' to quit without killing, or any other key to 
 
 ### On Linux
 
-- Parses `/proc/net/tcp` and `/proc/net/tcp6` for network connections
+- Parses `/proc/net/tcp`, `/proc/net/tcp6`, `/proc/net/udp` and `/proc/net/udp6` for network connections
 - Reads `/proc/[pid]/` files for process information
-- Maps socket inodes to PIDs by scanning `/proc/[pid]/fd/*`
+- Maps socket inodes to PIDs by scanning `/proc/[pid]/fd/*` once and reusing the lookup table
 
 ### On macOS
 
 - Uses `libproc` and `sysctl()` for process information
-- Falls back to `lsof` for network connection information
+- Falls back to `lsof` for network connection information (TCP and UDP)
 - Uses `proc_pidinfo()` for detailed process data
 
 ## Platform-Specific Notes
@@ -205,7 +211,6 @@ This project demonstrates several C programming concepts:
 
 This is a learning project. Feel free to experiment and extend it:
 
-- Add UDP port support
 - Implement process filtering
 - Add more output formats
 - Support for other platforms (BSD, etc.)
