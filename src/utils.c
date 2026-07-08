@@ -529,47 +529,53 @@ void format_uptime(const time_t start_time, char *buffer, size_t buffer_size) {
     /* Build the string based on what's relevant */
     char *ptr = buffer;
     size_t remaining = buffer_size;
-    int written = 0;
     bool need_comma = false;
 
+    /*
+     * snprintf returns the number of characters it *would* have written,
+     * which can exceed `remaining` on truncation. Advancing the cursor by
+     * that value unchecked would underflow the size_t `remaining` and hand a
+     * bogus (huge) size to the next call. append() clamps the advance so the
+     * cursor never runs past the buffer.
+     */
+    #define UPTIME_APPEND(...)                                        \
+        do {                                                          \
+            int _w = snprintf(ptr, remaining, __VA_ARGS__);           \
+            if (_w < 0 || (size_t)_w >= remaining) {                  \
+                return; /* truncated: nothing more fits */            \
+            }                                                         \
+            ptr += _w;                                                \
+            remaining -= (size_t)_w;                                  \
+        } while (0)
+
     if (days > 0) {
-        written = snprintf(ptr, remaining, "%d day%s", days, days > 1 ? "s" : "");
-        ptr += written;
-        remaining -= written;
+        UPTIME_APPEND("%d day%s", days, days > 1 ? "s" : "");
         need_comma = true;
     }
 
     if (hours > 0 || days > 0) {
         if (need_comma) {
-            written = snprintf(ptr, remaining, ", ");
-            ptr += written;
-            remaining -= written;
+            UPTIME_APPEND(", ");
         }
-        written = snprintf(ptr, remaining, "%d hour%s", hours, hours != 1 ? "s" : "");
-        ptr += written;
-        remaining -= written;
+        UPTIME_APPEND("%d hour%s", hours, hours != 1 ? "s" : "");
         need_comma = true;
     }
 
     if (minutes > 0 || hours > 0 || days > 0) {
         if (need_comma) {
-            written = snprintf(ptr, remaining, ", ");
-            ptr += written;
-            remaining -= written;
+            UPTIME_APPEND(", ");
         }
-        written = snprintf(ptr, remaining, "%d minute%s", minutes, minutes != 1 ? "s" : "");
-        ptr += written;
-        remaining -= written;
+        UPTIME_APPEND("%d minute%s", minutes, minutes != 1 ? "s" : "");
         need_comma = true;
     }
 
     /* Only show seconds if uptime is less than an hour */
     if (days == 0 && hours == 0) {
         if (need_comma) {
-            written = snprintf(ptr, remaining, ", ");
-            ptr += written;
-            remaining -= written;
+            UPTIME_APPEND(", ");
         }
-        snprintf(ptr, remaining, "%d second%s", seconds, seconds != 1 ? "s" : "");
+        UPTIME_APPEND("%d second%s", seconds, seconds != 1 ? "s" : "");
     }
+
+    #undef UPTIME_APPEND
 }
