@@ -72,33 +72,146 @@ static void get_username_from_uid(const int uid, char *username, size_t size) {
  * ============================================================================ */
 #ifdef __linux__
 
-/**
- * Parse /proc/net/tcp or /proc/net/tcp6 to find connections on a specific port (Linux)
+/*
+ * Mapping from socket inode to owning PID.
  *
- * Reads and parses Linux's /proc/net/tcp or /proc/net/tcp6 files to find all
- * network connections using a specific port. For each matching connection,
- * extracts network details and attempts to identify the owning process by
- * searching for socket inodes in /proc/*/fd/*.
+ * Building this once and reusing it for every parsed connection avoids the
+ * previous O(connections x processes x fds) behaviour, where /proc/<pid>/fd
+ * was rescanned in full for each connection found.
+ */
+typedef struct {
+    unsigned long inode;
+    pid_t pid;
+} inode_pid_entry_t;
+
+typedef struct {
+    inode_pid_entry_t *entries;
+    int count;
+} inode_map_t;
+
+/**
+ * Build a socket-inode -> PID map by scanning the fd links under /proc (Linux)
+ *
+ * Walks every numeric /proc directory and reads its fd symlinks, recording an
+ * entry for each "socket:[inode]" link. The resulting map is used to resolve
+ * the owning process of a connection in a single linear lookup instead of
+ * rescanning /proc per connection.
+ *
+ * @param map Output map to populate (caller must free with inode_map_free)
+ */
+static void inode_map_build(inode_map_t *map) {
+    map->entries = NULL;
+    map->count = 0;
+
+    DIR *proc_dir = opendir("/proc");
+    if (!proc_dir) {
+        return;
+    }
+
+    int capacity = 64;
+    map->entries = safe_malloc(capacity * sizeof(inode_pid_entry_t));
+
+    struct dirent *proc_entry;
+    while ((proc_entry = readdir(proc_dir)) != NULL) {
+        /* Skip non-numeric directories */
+        if (proc_entry->d_name[0] < '0' || proc_entry->d_name[0] > '9') {
+            continue;
+        }
+
+        char fd_path[256];
+        snprintf(fd_path, sizeof(fd_path), "/proc/%s/fd", proc_entry->d_name);
+
+        DIR *fd_dir = opendir(fd_path);
+        if (!fd_dir) {
+            continue;
+        }
+
+        const pid_t pid = atoi(proc_entry->d_name);
+
+        struct dirent *fd_entry;
+        while ((fd_entry = readdir(fd_dir)) != NULL) {
+            char link_path[512];
+            char link_target[512];
+            snprintf(link_path, sizeof(link_path), "%s/%s", fd_path, fd_entry->d_name);
+
+            ssize_t len = readlink(link_path, link_target, sizeof(link_target) - 1);
+            if (len <= 0) {
+                continue;
+            }
+            link_target[len] = '\0';
+
+            unsigned long inode;
+            if (sscanf(link_target, "socket:[%lu]", &inode) != 1) {
+                continue;
+            }
+
+            if (map->count >= capacity) {
+                capacity *= 2;
+                map->entries = safe_realloc(map->entries,
+                                            capacity * sizeof(inode_pid_entry_t));
+            }
+            map->entries[map->count].inode = inode;
+            map->entries[map->count].pid = pid;
+            map->count++;
+        }
+        closedir(fd_dir);
+    }
+
+    closedir(proc_dir);
+}
+
+/**
+ * Free an inode->PID map built by inode_map_build
+ */
+static void inode_map_free(inode_map_t *map) {
+    free(map->entries);
+    map->entries = NULL;
+    map->count = 0;
+}
+
+/**
+ * Resolve the PID owning a given socket inode, or -1 if not found
+ */
+static pid_t inode_map_lookup(const inode_map_t *map, unsigned long inode) {
+    for (int i = 0; i < map->count; i++) {
+        if (map->entries[i].inode == inode) {
+            return map->entries[i].pid;
+        }
+    }
+    return -1;
+}
+
+/**
+ * Parse a /proc/net/{tcp,tcp6,udp,udp6} file for connections on a port (Linux)
+ *
+ * Reads and parses one Linux /proc/net protocol file to find all network
+ * endpoints using a specific local port. For each matching entry the socket
+ * inode is resolved to the owning PID via a prebuilt inode->PID map.
  *
  * The function:
- * 1. Parses each line of the proc file (format: sl, local_address, rem_address, st, etc.)
- * 2. Filters connections matching the target port
- * 3. Converts hex addresses to dotted decimal notation
- * 4. Decodes TCP connection states (ESTABLISHED, LISTEN, etc.)
- * 5. Searches all /proc/<pid>/fd/* symlinks to find the process owning each socket
+ * 1. Parses each line (format: sl, local_address, rem_address, st, ..., inode)
+ * 2. Filters entries matching the target local port
+ * 3. Converts hex addresses to dotted decimal notation (IPv4)
+ * 4. Decodes TCP connection states; UDP has no connection state ("-")
+ * 5. Resolves the owning PID via inode_map_lookup (O(1) amortized, no rescan)
  *
- * @param filename Path to /proc/net file ("/proc/net/tcp" or "/proc/net/tcp6")
+ * @param filename Path to /proc/net file (tcp, tcp6, udp or udp6)
  * @param target_port Port number to search for
+ * @param imap Prebuilt inode->PID map used to resolve owning processes
  * @param connections Output pointer to dynamically allocated array of connections
  * @param count Output pointer to number of connections found
  * @return 0 on success, -1 if file cannot be opened
  */
 static int parse_proc_net(const char *filename, int target_port,
-                         connection_info_t **connections, int *count) {
+                          const inode_map_t *imap,
+                          connection_info_t **connections, int *count) {
     FILE *fp = fopen(filename, "r");
     if (!fp) {
         return -1;
     }
+
+    const bool is_udp = strstr(filename, "udp") != NULL;
+    const bool is_v6 = str_ends_with(filename, "6");
 
     *connections = NULL;
     *count = 0;
@@ -113,14 +226,14 @@ static int parse_proc_net(const char *filename, int target_port,
     }
 
     while (fgets(line, sizeof(line), fp)) {
-        unsigned long local_addr, remote_addr;
-        int local_port, remote_port, state, inode;
+        unsigned long local_addr, remote_addr, inode;
+        int local_port, remote_port, state;
         int uid;
 
         /* Parse the line - format varies but generally:
          * sl local_address rem_address st tx_queue rx_queue tr tm->when retrnsmt uid timeout inode
          */
-        int matched = sscanf(line, "%*d: %lx:%x %lx:%x %x %*x:%*x %*x:%*x %*x %d %*d %d",
+        int matched = sscanf(line, "%*d: %lx:%x %lx:%x %x %*x:%*x %*x:%*x %*x %d %*d %lu",
                            &local_addr, &local_port, &remote_addr, &remote_port,
                            &state, &uid, &inode);
 
@@ -160,66 +273,31 @@ static int parse_proc_net(const char *filename, int target_port,
         conn->local_port = local_port;
         conn->remote_port = remote_port;
 
-        /* Decode connection state */
-        switch (state) {
-            case 0x01: strcpy(conn->state, "ESTABLISHED"); break;
-            case 0x02: strcpy(conn->state, "SYN_SENT"); break;
-            case 0x03: strcpy(conn->state, "SYN_RECV"); break;
-            case 0x04: strcpy(conn->state, "FIN_WAIT1"); break;
-            case 0x05: strcpy(conn->state, "FIN_WAIT2"); break;
-            case 0x06: strcpy(conn->state, "TIME_WAIT"); break;
-            case 0x07: strcpy(conn->state, "CLOSE"); break;
-            case 0x08: strcpy(conn->state, "CLOSE_WAIT"); break;
-            case 0x09: strcpy(conn->state, "LAST_ACK"); break;
-            case 0x0A: strcpy(conn->state, "LISTEN"); break;
-            case 0x0B: strcpy(conn->state, "CLOSING"); break;
-            default: strcpy(conn->state, "UNKNOWN"); break;
-        }
-
-        strcpy(conn->protocol, strstr(filename, "tcp6") ? "TCP6" : "TCP");
-
-        /* Find PID by searching for inode in /proc/*/fd/* */
-        conn->pid = -1;
-        DIR *proc_dir = opendir("/proc");
-        if (proc_dir) {
-            struct dirent *proc_entry;
-            while ((proc_entry = readdir(proc_dir)) != NULL) {
-                /* Skip non-numeric directories */
-                if (proc_entry->d_name[0] < '0' || proc_entry->d_name[0] > '9') {
-                    continue;
-                }
-
-                char fd_path[256];
-                snprintf(fd_path, sizeof(fd_path), "/proc/%s/fd", proc_entry->d_name);
-
-                DIR *fd_dir = opendir(fd_path);
-                if (!fd_dir) {
-                    continue;
-                }
-
-                struct dirent *fd_entry;
-                while ((fd_entry = readdir(fd_dir)) != NULL) {
-                    char link_path[512];
-                    char link_target[512];
-                    snprintf(link_path, sizeof(link_path), "%s/%s", fd_path, fd_entry->d_name);
-
-                    ssize_t len = readlink(link_path, link_target, sizeof(link_target) - 1);
-                    if (len > 0) {
-                        link_target[len] = '\0';
-                        char expected[64];
-                        snprintf(expected, sizeof(expected), "socket:[%d]", inode);
-                        if (strcmp(link_target, expected) == 0) {
-                            conn->pid = atoi(proc_entry->d_name);
-                            closedir(fd_dir);
-                            goto found_pid;
-                        }
-                    }
-                }
-                closedir(fd_dir);
+        /* Decode connection state (TCP only; UDP is connectionless) */
+        if (is_udp) {
+            strcpy(conn->state, "-");
+        } else {
+            switch (state) {
+                case 0x01: strcpy(conn->state, "ESTABLISHED"); break;
+                case 0x02: strcpy(conn->state, "SYN_SENT"); break;
+                case 0x03: strcpy(conn->state, "SYN_RECV"); break;
+                case 0x04: strcpy(conn->state, "FIN_WAIT1"); break;
+                case 0x05: strcpy(conn->state, "FIN_WAIT2"); break;
+                case 0x06: strcpy(conn->state, "TIME_WAIT"); break;
+                case 0x07: strcpy(conn->state, "CLOSE"); break;
+                case 0x08: strcpy(conn->state, "CLOSE_WAIT"); break;
+                case 0x09: strcpy(conn->state, "LAST_ACK"); break;
+                case 0x0A: strcpy(conn->state, "LISTEN"); break;
+                case 0x0B: strcpy(conn->state, "CLOSING"); break;
+                default: strcpy(conn->state, "UNKNOWN"); break;
             }
-found_pid:
-            closedir(proc_dir);
         }
+
+        snprintf(conn->protocol, sizeof(conn->protocol), "%s%s",
+                 is_udp ? "UDP" : "TCP", is_v6 ? "6" : "");
+
+        /* Resolve the owning PID via the prebuilt inode map */
+        conn->pid = inode_map_lookup(imap, inode);
 
         (*count)++;
     }
@@ -250,25 +328,29 @@ int platform_get_port_connections(int port, connection_info_t **connections, int
     int total = 0;
     connection_info_t *all_conns = NULL;
 
-    /* Parse TCP connections */
-    connection_info_t *tcp_conns = NULL;
-    int tcp_count = 0;
-    if (parse_proc_net("/proc/net/tcp", port, &tcp_conns, &tcp_count) == 0) {
-        all_conns = safe_realloc(all_conns, (total + tcp_count) * sizeof(connection_info_t));
-        memcpy(all_conns + total, tcp_conns, tcp_count * sizeof(connection_info_t));
-        total += tcp_count;
-        free(tcp_conns);
+    /* Build the socket-inode -> PID map once and reuse it for every file */
+    inode_map_t imap;
+    inode_map_build(&imap);
+
+    /* Parse TCP (IPv4/IPv6) and UDP (IPv4/IPv6) endpoints on the target port */
+    static const char *proc_files[] = {
+        "/proc/net/tcp", "/proc/net/tcp6",
+        "/proc/net/udp", "/proc/net/udp6",
+    };
+
+    for (size_t f = 0; f < sizeof(proc_files) / sizeof(proc_files[0]); f++) {
+        connection_info_t *conns = NULL;
+        int conn_count = 0;
+        if (parse_proc_net(proc_files[f], port, &imap, &conns, &conn_count) == 0) {
+            all_conns = safe_realloc(all_conns,
+                                     (total + conn_count) * sizeof(connection_info_t));
+            memcpy(all_conns + total, conns, conn_count * sizeof(connection_info_t));
+            total += conn_count;
+        }
+        free(conns);
     }
 
-    /* Parse TCP6 connections */
-    connection_info_t *tcp6_conns = NULL;
-    int tcp6_count = 0;
-    if (parse_proc_net("/proc/net/tcp6", port, &tcp6_conns, &tcp6_count) == 0) {
-        all_conns = safe_realloc(all_conns, (total + tcp6_count) * sizeof(connection_info_t));
-        memcpy(all_conns + total, tcp6_conns, tcp6_count * sizeof(connection_info_t));
-        total += tcp6_count;
-        free(tcp6_conns);
-    }
+    inode_map_free(&imap);
 
     *connections = all_conns;
     *count = total;
