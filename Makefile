@@ -14,6 +14,10 @@ ifeq ($(UNAME_S),Darwin)
 else ifeq ($(UNAME_S),Linux)
     # Linux
     PLATFORM = Linux
+    # Expose POSIX symbols (pid_t, strdup, kill, usleep, ...) that -std=c11
+    # hides under glibc's __STRICT_ANSI__. Not needed (and harmful) on macOS,
+    # where these macros would instead hide the BSD types the SDK headers use.
+    CFLAGS += -D_DEFAULT_SOURCE -D_POSIX_C_SOURCE=200809L
 else
     $(error Unsupported platform: $(UNAME_S))
 endif
@@ -54,9 +58,13 @@ $(TARGET): $(OBJECTS)
 	@$(CC) $(OBJECTS) $(LDFLAGS) -o $(TARGET)
 
 # Debug build
+# Use separate sub-make invocations: chaining clean+all in one invocation
+# leaves the order-only $(OBJDIR) target evaluated as up-to-date (it exists at
+# startup), so clean would delete obj/ without it being recreated.
 .PHONY: debug
-debug: CFLAGS += $(DEBUGFLAGS)
-debug: clean all
+debug:
+	$(MAKE) clean
+	$(MAKE) CFLAGS="$(CFLAGS) $(DEBUGFLAGS)" all
 	@echo "Debug build complete"
 
 # Clean build artifacts

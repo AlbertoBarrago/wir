@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <time.h>
+#include <sys/types.h> /* pid_t */
 
 /**
  * Global flag for controlling colored output
