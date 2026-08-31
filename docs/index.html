@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>wir - What Is Running</title>
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml" />
+  <meta name="description" content="A cross-platform CLI tool written in C to inspect what's running on specific ports and explain process details." />
+  <style>
+    :root {
+      --bg: #0d1117;
+      --bg-alt: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --text-dim: #8b949e;
+      --accent: #3fb950;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.6;
+    }
+    header {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 64px 24px 32px;
+      text-align: center;
+    }
+    header img.logo {
+      width: 260px;
+      max-width: 80%;
+      height: auto;
+    }
+    header p.tagline {
+      color: var(--text-dim);
+      font-size: 1.1rem;
+      margin-top: 8px;
+    }
+    .badges {
+      margin-top: 16px;
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .badges img { height: 20px; }
+    main {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 0 24px 64px;
+    }
+    section { margin-top: 48px; }
+    h2 {
+      font-size: 1.4rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+    }
+    .demo img {
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+    }
+    ul.features {
+      list-style: none;
+      padding: 0;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+    }
+    ul.features li {
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 0.95rem;
+    }
+    pre {
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      overflow-x: auto;
+      font-family: "SF Mono", "JetBrains Mono", "Fira Code", Consolas, monospace;
+      font-size: 0.9rem;
+    }
+    code { color: var(--accent); }
+    a { color: var(--accent); }
+    footer {
+      text-align: center;
+      color: var(--text-dim);
+      padding: 32px 24px 48px;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <img class="logo" src="../assets/logo.svg" alt="wir logo" />
+    <p class="tagline">A cross-platform CLI tool written in C to inspect what's running on specific ports and explain process details.</p>
+    <div class="badges">
+      <img src="https://github.com/AlbertoBarrago/wir/actions/workflows/release.yml/badge.svg" alt="Release status" />
+      <img src="https://img.shields.io/github/v/tag/AlbertoBarrago/wir?label=homebrew&color=orange&logo=homebrew" alt="Homebrew version" />
+    </div>
+  </header>
+
+  <main>
+    <section class="demo">
+      <h2>Demo</h2>
+      <img src="../assets/demo.gif" alt="wir demo" />
+    </section>
+
+    <section>
+      <h2>Features</h2>
+      <ul class="features">
+        <li>Check what process is using a specific port (TCP and UDP)</li>
+        <li>Get detailed information about a process by PID</li>
+        <li>List all running processes on the system</li>
+        <li>Show the full process ancestry tree</li>
+        <li>Display process environment variables</li>
+        <li>Interactive mode to kill processes with a keypress</li>
+        <li>Human-readable process states</li>
+        <li>Process uptime tracking</li>
+        <li>Multiple output formats (normal, short, JSON, tree)</li>
+        <li>Security warnings for risky configurations</li>
+        <li>Cross-platform support (macOS and Linux)</li>
+        <li>Short flags for every option</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Installation</h2>
+      <p>Via Homebrew (macOS):</p>
+      <pre><code>brew tap AlbertoBarrago/tap
+brew install wir</code></pre>
+      <p>Building from source:</p>
+      <pre><code>make
+sudo make install</code></pre>
+    </section>
+
+    <section>
+      <h2>Source</h2>
+      <p>Full documentation, usage, and source code on <a href="https://github.com/AlbertoBarrago/wir">GitHub</a>.</p>
+    </section>
+  </main>
+
+  <footer>
+    &copy; 2026 Alberto Barrago. wir is released under its repository license.
+  </footer>
+</body>
+</html>

@@ -1,3 +1,5 @@
+![wir logo](assets/logo.svg)
+
 # wir - What Is Running
 [![Release](https://github.com/AlbertoBarrago/wir/actions/workflows/release.yml/badge.svg)](https://github.com/AlbertoBarrago/wir/actions/workflows/release.yml)
 [![Homebrew Version](https://img.shields.io/github/v/tag/AlbertoBarrago/wir?label=homebrew&color=orange&logo=homebrew)](https://github.com/AlbertoBarrago/homebrew-tap/blob/main/Formula/wir.rb)
