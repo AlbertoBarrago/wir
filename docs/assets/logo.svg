@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 96" width="320" height="96" role="img" aria-labelledby="wirLogoTitle">
+  <title id="wirLogoTitle">wir - What Is Running</title>
+  <defs>
+    <style>
+      .wir-bg { fill: #0d1117; }
+      .wir-prompt { fill: #3fb950; }
+      .wir-text { fill: #e6edf3; font-family: 'SF Mono', 'JetBrains Mono', 'Fira Code', Consolas, monospace; font-weight: 700; }
+      .wir-cursor { fill: #3fb950; }
+    </style>
+  </defs>
+  <rect class="wir-bg" x="0" y="0" width="320" height="96" rx="14"/>
+  <text class="wir-prompt" x="24" y="60" font-size="40" font-family="SF Mono, JetBrains Mono, Fira Code, Consolas, monospace" font-weight="700">&gt;_</text>
+  <text class="wir-text" x="90" y="60" font-size="40">wir</text>
+  <rect class="wir-cursor" x="185" y="30" width="10" height="34">
+    <animate attributeName="opacity" values="1;0;1" dur="1.1s" repeatCount="indefinite"/>
+  </rect>
+</svg>
